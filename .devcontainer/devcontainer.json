@@ -1,54 +1,59 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the
 // README at: https://github.com/devcontainers/templates/tree/main/src/ubuntu
 {
-	"name": "ga-rules",
-	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-	"build": {
-		"dockerfile": "Dockerfile"
-	},
-	// Features to add to the dev container. More info: https://containers.dev/features.
-	"features": {
-		"ghcr.io/devcontainers/features/git:1.3.8": {
-			"version": "latest"
-		},
-		"ghcr.io/devcontainers/features/github-cli:1.1.3": {
-			"installDirectlyFromGitHubRelease": true,
-			"version": "latest"
-		},
-		"ghcr.io/devcontainers/features/docker-in-docker:4.1.2": {
-			"version": "latest",
-			"dockerDashComposeVersion": "v2"
-		},
-		"ghcr.io/devcontainers/features/rust:1.6.0": {
-			"version": "latest"
-		},
-		"ghcr.io/devcontainers/features/node:2.1.0": {
-			"version": "latest"
-		},
-		"ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
-	},
-	// Use 'forwardPorts' to make a list of ports inside the container available locally.
-	// "forwardPorts": [],
-	// Use 'postCreateCommand' to run commands after the container is created.
-	// "postCreateCommand": "uname -a",
-	// Configure tool-specific properties.
-	"customizations": {
-		"vscode": {
-			"extensions": [
-				"ms-azuretools.vscode-docker", //Docker
-				//Typescript
-				"oven.bun-vscode", //Bun
-				//Git
-				"github.vscode-pull-request-github", //GitHub Pull Requests
-				"donjayamanne.githistory", //Git History
-				"mhutchie.git-graph", //Git Graph
-				//Tools
-				"mechatroner.rainbow-csv", //Rainbow CSV
-				"streetsidesoftware.code-spell-checker", //Code Spell Checker
-				"anthropic.claude-code"
-			]
-		}
-	}
-	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
-	// "remoteUser": "root"
+  "name": "ga-rules",
+  // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  // Features to add to the dev container. More info: https://containers.dev/features.
+  "features": {
+    "ghcr.io/devcontainers/features/git:1.3.8": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1.1.3": {
+      "installDirectlyFromGitHubRelease": true,
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:4.1.2": {
+      "version": "latest",
+      "dockerDashComposeVersion": "v2"
+    },
+    "ghcr.io/devcontainers/features/rust:1.6.0": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/node:2.1.0": {
+      "version": "latest"
+    },
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+  },
+  // Use 'forwardPorts' to make a list of ports inside the container available locally.
+  // "forwardPorts": [],
+  // Use 'postCreateCommand' to run commands after the container is created.
+  // "postCreateCommand": "uname -a",
+  // Configure tool-specific properties.
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-docker", //Docker
+        //Typescript
+        "oven.bun-vscode", //Bun
+        "oxc.oxc-vscode", //oxlint + oxfmt
+        //Git
+        "github.vscode-pull-request-github", //GitHub Pull Requests
+        "donjayamanne.githistory", //Git History
+        "mhutchie.git-graph", //Git Graph
+        //Tools
+        "mechatroner.rainbow-csv", //Rainbow CSV
+        "streetsidesoftware.code-spell-checker", //Code Spell Checker
+        "anthropic.claude-code"
+      ]
+    }
+  },
+  "mounts": ["source=claude-code-config,target=/home/node/.claude,type=volume"],
+  "containerEnv": {
+    "CLAUDE_CONFIG_DIR": "/home/node/.claude"
+  }
+  // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+  // "remoteUser": "root"
 }
