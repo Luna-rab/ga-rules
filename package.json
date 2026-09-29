@@ -1,0 +1,30 @@
+{
+  "name": "ga-rules",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --hot src/server/index.ts",
+    "start": "bun run src/server/index.ts",
+    "build:index": "bun run src/build/index.ts",
+    "build:image": "docker build --build-arg DATA_VERSION=$(date -u +%Y%m%dT%H%M%SZ) -t ga-rules .",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
+    "lint": "oxlint",
+    "typecheck": "tsc",
+    "test": "bun test",
+    "check": "bun run fmt:check && bun run lint && bun run typecheck && bun run test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.31.0",
+    "hono": "^4.13.11",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "oxfmt": "^0.71.0",
+    "oxlint": "^1.86.0",
+    "oxlint-tsgolint": "^7.0.2003",
+    "typescript": "^7.0.2"
+  },
+  "packageManager": "bun@1.4.2"
+}

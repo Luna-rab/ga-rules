@@ -1,0 +1,4 @@
+node_modules/
+
+# build:index の出力。イメージを作るたびに取得し直すので git に入れない
+index.sqlite
