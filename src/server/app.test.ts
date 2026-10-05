@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
-import { describe, expect, test } from "bun:test";
-import { createSchema } from "../shared/schema";
+import { beforeAll, describe, expect, test } from "bun:test";
+import { createTables } from "../build/infra/create-tables";
 import { createApp } from "./app";
 
 function rpc(method: string, params: Record<string, unknown> = {}): Request {
@@ -17,8 +17,11 @@ function rpc(method: string, params: Record<string, unknown> = {}): Request {
 
 describe("/mcp", () => {
   const db = new Database(":memory:", { strict: true });
-  createSchema(db);
   const app = createApp(db);
+
+  beforeAll(async () => {
+    await createTables(db);
+  });
 
   test("initialize にサーバー名を返す", async () => {
     const res = await app.request(

@@ -13,6 +13,86 @@
   "env": {
     "builtin": true
   },
+  "overrides": [
+    {
+      "files": ["src/build/domain/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "bun:sqlite",
+                  "node:*",
+                  "node:*/*",
+                  "bun",
+                  "bun/*",
+                  "child_process",
+                  "child_process/*",
+                  "cluster",
+                  "cluster/*",
+                  "dgram",
+                  "dgram/*",
+                  "dns",
+                  "dns/*",
+                  "fs",
+                  "fs/*",
+                  "http",
+                  "http/*",
+                  "http2",
+                  "http2/*",
+                  "https",
+                  "https/*",
+                  "inspector",
+                  "inspector/*",
+                  "module",
+                  "module/*",
+                  "net",
+                  "net/*",
+                  "os",
+                  "os/*",
+                  "path",
+                  "path/*",
+                  "perf_hooks",
+                  "perf_hooks/*",
+                  "process",
+                  "process/*",
+                  "readline",
+                  "readline/*",
+                  "repl",
+                  "repl/*",
+                  "stream",
+                  "stream/*",
+                  "tls",
+                  "tls/*",
+                  "tty",
+                  "tty/*",
+                  "url",
+                  "url/*",
+                  "v8",
+                  "v8/*",
+                  "vm",
+                  "vm/*",
+                  "worker_threads",
+                  "worker_threads/*",
+                  "zlib",
+                  "zlib/*",
+                  "drizzle-orm",
+                  "drizzle-orm/*",
+                  "drizzle-kit",
+                  "drizzle-kit/*",
+                  "**/infra",
+                  "**/infra/**"
+                ],
+                "message": "domain/ は入出力をしない。bun・bun:sqlite・Node の組み込み・drizzle・infra/ は infra/ か build-index.ts で使う"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
   "options": {
     "typeAware": true,
     "denyWarnings": true
