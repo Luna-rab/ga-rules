@@ -49,6 +49,17 @@ export const CORRECTIONS: readonly Correction[] = [
     reason:
       "リンク先の節が無いので外す（game-terms.md に have・gain・get・become・are の見出しが無い）",
   },
+  {
+    kind: "rule-link",
+    path: "game-mechanics/game-mechanics-types-of-effects/types-of-effects-continuous-effects/README.md",
+    from: "/broken/pages/d5fQPRV40fjs6PztDRCI",
+    to: {
+      pageId: "general-rules-card-characteristics",
+      sectionId: "general-rules-card-characteristics#General Rules",
+    },
+    reason:
+      "GitBook の壊れたリンク（/broken/pages/）。リンクの文字が characteristics なので、カードの特性のページの General Rules を指す",
+  },
 ];
 
 // card-reference の項目だけを当てる。当たらない項目は名指しして DataError
