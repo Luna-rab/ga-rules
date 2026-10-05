@@ -34,7 +34,7 @@ type ColumnInfo = { name: string; type: string; notnull: number; dflt_value: unk
 // 受入条件が決めていない列（card の types など）は、NOT NULL で既定値の無いものだけ仮の値で埋める。
 function insertRow(db: Database, table: string, values: Record<string, string | number>): void {
   const row: Record<string, string | number> = { ...values };
-  const columns = db.query(`PRAGMA table_info(${table})`).all() as ColumnInfo[];
+  const columns = db.query<ColumnInfo, []>(`PRAGMA table_info(${table})`).all();
   for (const c of columns) {
     if (c.name in row || c.notnull === 0 || c.dflt_value !== null) continue;
     if (c.pk > 0 && c.type.toUpperCase() === "INTEGER") continue;
@@ -49,18 +49,19 @@ function insertRow(db: Database, table: string, values: Record<string, string | 
 describe("createTables", () => {
   test("空の DB に 15 テーブルと 3 つの FTS テーブルを作る", async () => {
     const db = await freshDb();
-    const names = (db.query("SELECT name FROM sqlite_master").all() as { name: string }[]).map(
-      (r) => r.name,
-    );
+    const names = db
+      .query<{ name: string }, []>("SELECT name FROM sqlite_master")
+      .all()
+      .map((r) => r.name);
     for (const t of [...TABLES, ...FTS_TABLES]) expect(names).toContain(t);
   });
 
   test("FTS テーブルは porter unicode61 で作る", async () => {
     const db = await freshDb();
     for (const t of FTS_TABLES) {
-      const row = db.query("SELECT sql FROM sqlite_master WHERE name = ?").get(t) as {
-        sql: string;
-      } | null;
+      const row = db
+        .query<{ sql: string }, [string]>("SELECT sql FROM sqlite_master WHERE name = ?")
+        .get(t);
       expect(row).not.toBeNull();
       expect(row!.sql).toContain("porter unicode61");
     }
