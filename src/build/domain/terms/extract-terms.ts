@@ -51,7 +51,7 @@ function splitHeading(heading: string): string[] {
     .replace(/\s*\([^)]*\)/g, "")
     .trim()
     .replace(/:$/, "")
-    .replace(/\s+N$/, "")
+    .replace(/\s+N\+?$/, "")
     .trim();
   return cleaned
     .split(cleaned.includes("/") ? /\s*\/\s*|\s+and\s+/ : /\s*\/\s*/)
