@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Page, Term } from "../model";
-import { extractTerms } from ".";
+import { extractTerms, Matcher } from ".";
 
 // 条文は用語の抽出に使わないので、節は見出しだけを持たせる
 function page(pageId: string, title: string, headings: string[]): Page {
@@ -63,6 +63,21 @@ describe("extractTerms", () => {
     expect(find(terms, "Critical N")).toBeUndefined();
   });
 
+  test("末尾の ` N+` も外す: Memory N+ → Memory で、Memory 4+ の文に当たる", () => {
+    const terms = extractTerms([
+      page("keywords-and-abilities", "Keywords and Abilities", ["Memory N+"]),
+    ]);
+
+    const memory = find(terms, "Memory");
+    expect(memory?.definitions).toEqual([
+      { pageId: "keywords-and-abilities", sectionId: "keywords-and-abilities#Memory N+" },
+    ]);
+    expect(find(terms, "Memory N+")).toBeUndefined();
+
+    const matcher = new Matcher(terms.map((t) => ({ key: t.name, names: [t.name, ...t.aliases] })));
+    expect(matcher.match("Memory 4+ — draw a card.")).toEqual(["Memory"]);
+  });
+
   test("括弧の補足を外し、Lineage (term) と Lineage (Keyword) を Term 1 つ・定義 2 件にする", () => {
     const terms = extractTerms([
       page("game-terms", "Glossary - Game Terms", ["Lineage (term)"]),
@@ -100,7 +115,11 @@ describe("extractTerms", () => {
 
     const died = find(terms, "Died");
     expect(died).toBeDefined();
-    expect((died?.aliases ?? []).toSorted((a, b) => a.localeCompare(b))).toEqual(["Dies", "Killed", "Kills"]);
+    expect((died?.aliases ?? []).toSorted((a, b) => a.localeCompare(b))).toEqual([
+      "Dies",
+      "Killed",
+      "Kills",
+    ]);
     expect(died?.definitions).toEqual([
       { pageId: "game-terms", sectionId: "game-terms#Died/Dies and Kills/Killed" },
     ]);

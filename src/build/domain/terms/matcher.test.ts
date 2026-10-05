@@ -51,7 +51,9 @@ describe("Matcher", () => {
       { key: 1, names: ["Activate", "Activating"] },
       { key: 2, names: ["Omen"] },
     ]);
-    expect(m.match("Activating an omen. Activate another Omen.").toSorted((a, b) => a - b)).toEqual([1, 2]);
+    expect(m.match("Activating an omen. Activate another Omen.").toSorted((a, b) => a - b)).toEqual(
+      [1, 2],
+    );
   });
 
   test("当たる名前が無ければ空", () => {
