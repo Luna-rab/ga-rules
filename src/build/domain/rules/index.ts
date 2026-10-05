@@ -94,9 +94,11 @@ function splitPage(raw: RawPage): DraftPage {
   };
 
   // hint だけを挟んで番号付きリストが書き直されたら（`1.` → hint → `1.`）、続き番号にする。
-  // hint は直前の条文に含めるので、リストは途切れていないものとして扱う
+  // hint は直前の条文に含めるので、リストは途切れていないものとして扱う。
+  // ずらした幅 shift は、書き直されたリストの深さ 0 の項目すべてに足す
   let lastTop = 0;
   let afterHint = false;
+  let shift = 0;
   const startSection = (heading: string, anchorIds: string[]): void => {
     section = { heading, anchorIds, clauses: [] };
     sections.push(section);
@@ -104,6 +106,7 @@ function splitPage(raw: RawPage): DraftPage {
     stack = [];
     lastTop = 0;
     afterHint = false;
+    shift = 0;
   };
 
   for (let i = titleAt + 1; i < lines.length; i++) {
@@ -116,6 +119,7 @@ function splitPage(raw: RawPage): DraftPage {
       // 画像を消して空になった見出しは節にせず、直前の節を続ける
       if (h.heading === "") {
         afterHint = false;
+        shift = 0;
         continue;
       }
       startSection(h.heading, h.anchorIds);
@@ -126,8 +130,10 @@ function splitPage(raw: RawPage): DraftPage {
       const boldHeading = cleanHeading(bold[1] ?? "").heading;
       const rest = (bold[2] ?? "").replace(/^\s*:?\s*/, "").trim();
       // 空になった見出しは `####` と同じく節にせず、直前の節を続ける
-      if (boldHeading === "") afterHint = false;
-      else startSection(boldHeading, []);
+      if (boldHeading === "") {
+        afterHint = false;
+        shift = 0;
+      } else startSection(boldHeading, []);
       if (rest !== "") ensureClause().lines.push(rest);
       continue;
     }
@@ -150,7 +156,9 @@ function splitPage(raw: RawPage): DraftPage {
       let n = Number(item[2]);
       while (stack.length > 0 && indent < (stack.at(-1)?.contentCol ?? 0) - 1) stack.pop();
       if (stack.length === 0) {
-        if (afterHint && n <= lastTop) n = lastTop + 1;
+        // hint の後で前の番号より大きい番号から続けていれば、書き手が番号を直したものとしてずらさない
+        if (afterHint) shift = n <= lastTop ? lastTop + 1 - n : 0;
+        n += shift;
         lastTop = n;
       }
       afterHint = false;
@@ -167,6 +175,7 @@ function splitPage(raw: RawPage): DraftPage {
     const text = line.trim();
     if (text === "") continue;
     afterHint = false;
+    shift = 0;
     ensureClause().lines.push(text);
   }
 
