@@ -33,7 +33,7 @@ function clean(markdown: string): string {
   return markdown
     .replace(/^---\r?\n[\s\S]*?\r?\n---[ \t]*(\r?\n|$)/, "")
     .replace(/<img\b[^>]*>/g, "")
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/!\[[^\]]*\]\((?:<[^>]*>|[^)]*)\)/g, "")
     .replaceAll("&#x20;", " ");
 }
 
@@ -123,8 +123,11 @@ function splitPage(raw: RawPage): DraftPage {
     }
     const bold = /^\*\*([^*]+)\*\*(.*)$/.exec(line);
     if (bold) {
-      startSection(cleanHeading(bold[1] ?? "").heading, []);
+      const boldHeading = cleanHeading(bold[1] ?? "").heading;
       const rest = (bold[2] ?? "").replace(/^\s*:?\s*/, "").trim();
+      // 空になった見出しは `####` と同じく節にせず、直前の節を続ける
+      if (boldHeading === "") afterHint = false;
+      else startSection(boldHeading, []);
       if (rest !== "") ensureClause().lines.push(rest);
       continue;
     }
@@ -247,7 +250,7 @@ function buildPage(d: DraftPage, resolver: LinkResolver): Page {
 // --- リンクの解決と書き換え ---
 
 // ラベルは 1 段の角括弧の入れ子まで（`[a [b] c]`）。括弧の中は `href` か `href "title"`
-const LINK = /\[((?:[^[\]]|\[[^[\]]*\])*)\]\(\s*([^)\s]*)(?:\s+"[^"]*")?\s*\)/g;
+const LINK = /\[((?:[^[\]]|\[[^[\]]*\])*)\]\(\s*(<[^>]*>|[^)\s]*)(?:\s+"[^"]*")?\s*\)/g;
 
 class LinkResolver {
   private readonly byPath = new Map<string, DraftPage>();
@@ -289,7 +292,8 @@ class LinkResolver {
 
   rewrite(path: string, text: string): { text: string; links: LinkTarget[] } {
     const links: LinkTarget[] = [];
-    const out = text.replace(LINK, (whole, label: string, href: string) => {
+    const out = text.replace(LINK, (whole, label: string, rawHref: string) => {
+      const href = rawHref.replace(/^<(.*)>$/, "$1");
       const key = fixKey(path, href);
       const fix = this.fixes.get(key);
       if (fix) {
@@ -353,9 +357,10 @@ function fixKey(path: string, from: string): string {
   return `${path}\u0000${from}`;
 }
 
-// from のファイルのディレクトリから rel を解決する。data/rules からの相対パスを返す
+// from のファイルのディレクトリから rel を解決する。`/` で始まる rel は data/rules の直下から。
+// data/rules からの相対パスを返す
 function joinPath(from: string, rel: string): string {
-  const parts = from.split("/").slice(0, -1);
+  const parts = rel.startsWith("/") ? [] : from.split("/").slice(0, -1);
   for (const seg of rel.split("/")) {
     if (seg === "" || seg === ".") continue;
     if (seg === "..") parts.pop();
