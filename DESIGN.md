@@ -94,15 +94,69 @@ src/
 - Bun のバージョンは `package.json` の `packageManager` を正とし、CI の `setup-bun` と Dockerfile の `oven/bun` のタグを合わせる。
 - 採らなかった構成: Bun workspaces で 3 パッケージに分ける。取り込みは `fetch` と `bun:sqlite` で書け、分ける依存がほぼ無い。設定ファイルが 3 組になるだけ。
 
+### 索引ビルドのコード構成
+
+`src/build/` を、ビジネスロジック（`domain/`）と入出力（`infra/`）の 2 層に分ける。誤りの修正・条文への分解・用語の照合・結び付きの生成は、データを受け取ってデータを返す関数にし、取得元やデータベースから切り離して文字列だけでテストできるようにする。
+
+```
+src/build/
+  domain/                 純粋な関数と型だけ。入出力をしない
+    model.ts              Page / Section / Clause / Term / Card / Ruling などの型
+    errors.ts             DataError
+    corrections/          修正の一覧（データ）と適用
+    rules/                ページ・節・条文への分解、リンクの解決と書き換え
+    terms/                用語・別名・定義の場所の抽出、照合器
+    relate.ts             条文・カード・裁定と、用語・カード名を結ぶ
+  infra/                  外とのやりとりだけ
+    fetch/                GitHub と api.gatcg.com からの取得（bun run fetch:data）
+    raw-store.ts          data/ の読み書き
+    index-writer.ts       drizzle で index.sqlite に書き込み、FTS5 を作る
+  build-index.ts          組み立て役。infra で読む → domain で変換する → infra で書く
+src/shared/db/schema.ts   drizzle のテーブル定義（infra とサーバーが使う）
+src/shared/db/fts.ts      FTS5 の仮想テーブルの SQL
+src/shared/cite.ts        引用 ID の組み立てと解釈
+```
+
+```mermaid
+flowchart LR
+    E[build-index.ts] --> I[infra/]
+    E --> D[domain/]
+    I --> D
+    D -.->|import 禁止| I
+```
+
+- 依存は `infra/` → `domain/` の一方向。`domain/` から `bun:sqlite`・`node:*`・`drizzle-orm`・`infra/` を import すると、oxlint の `no-restricted-imports`（`.oxlintrc.json` の `overrides`）で `bun run check` が失敗する。分けたつもりでも、守らせる仕組みが無いと崩れる。
+- drizzle のスキーマはテーブルの形でありインフラの関心事なので、`domain/` は参照しない。`domain/` の型から行への変換は `index-writer.ts` で行う。
+- 結び付きは TypeScript でメモリ上に作ってから書き込む。データはカード 1.8MB・ルール 0.7MB でメモリに載る。照合の規則（長い語から先に当てる・複数形・単語境界・別名）は SQL では書きにくく、FTS の語幹照合では「`Element Bonus` の中の `Element` を数えない」を表せない。
+- テーブルを作る SQL は、ビルドのたびに `drizzle-kit/api` の `generateSQLiteMigration` で、空の状態から現在のスキーマまでの差分として作る。索引は毎回作り直すのでマイグレーションの履歴は意味を持たず、SQL のファイルを持たなければ生成し忘れも起きない。`drizzle-kit/api` はコマンドラインほど文書化されていないので、生成した SQL でテーブルが作れることをテストで確かめる。`drizzle-kit` は開発用の依存なので、Docker の 1 段目だけ開発用の依存も入れる。
+- FTS5 の仮想テーブルは drizzle が扱えないので、SQL を手で書く（`src/shared/db/fts.ts`）。
+- 異常は最初の 1 件で `DataError` を投げて止め、`index.sqlite` は書き込まない。
+- クラスは照合器の 1 つだけ（組み立てた正規表現を持ち回す）。ほかは関数と型で組む。
+- 採らなかった構成
+  - ポート（リポジトリのインターフェース）・ユースケースのクラス・依存性の注入。取得元も書き込み先も実装が 1 つずつで、テストでも差し替えない。`domain/` は入出力をしないので、テストはデータを直接渡せば足りる。
+  - 層を分けず 1 ディレクトリに関数を並べる。入出力をしない関数に、いつの間にか `bun:sqlite` が混ざっても気づけない。
+
 ### データの取得と焼き込み
 
-ルール文書もカードも頻繁に更新されるので、リポジトリに置かない。イメージを作るたびに最新を取得して焼き込む。`index.sqlite` は git の管理外にする。
+ルール文書もカードも頻繁に更新されるので、リポジトリに置かない。イメージを作るたびに最新を取得して焼き込む。
+
+取得（`bun run fetch:data`）と索引の作成（`bun run build:index`）を分ける。取得した原本は `data/` に置き、手元でも Docker の 1 段目（`/app/data`）でも同じ構成にする。手元では 1 度取得すれば、ネットワークなしで索引を何度でも作り直せる。`data/` と `index.sqlite` は git の管理外にする。
+
+```
+data/
+  rules/        gitbook-rules の .md だけ（リポジトリと同じ木構造。.gitbook/ の画像は展開しない）
+                直下の README.md（変更履歴）と table-of-contents.md（SUMMARY.md と同じ目次）は捨てる
+  cards/        <slug>.json に 1 枚ずつ。「カードの取り込み」の列だけを整形して書く（2,495 ファイル・計 1.8MB）
+  source.json   取り込んだルールのコミット SHA・カード枚数・取得日時
+```
 
 ```mermaid
 flowchart LR
     subgraph S1["1 段目"]
-        C[gitbook-rules を clone] --> I[bun run build:index]
-        API[api.gatcg.com] --> I
+        GH[gitbook-rules の tarball] --> F[bun run fetch:data]
+        API[api.gatcg.com] --> F
+        F --> D[/data/]
+        D --> I[bun run build:index]
         I --> DB[(index.sqlite)]
     end
     subgraph S2["2 段目（実行用）"]
@@ -114,6 +168,7 @@ flowchart LR
 
 - 取得は Dockerfile の中で行う。`docker build` 1 回で「最新を取得してイメージを作る」が済み、手元・CI・Cloud Build のどこでも同じものができる。
 - 取得の直前に `ARG DATA_VERSION` を置き、ビルドごとに値を変える。レイヤーキャッシュが効くと、古いデータのまま新しいイメージができる。
+- ルール文書は `git clone` ではなく GitHub の tarball で取る。`oven/bun` のイメージに `git` が無く、`tar` はある。ブランチの先頭の SHA を先に API で決めてから、その SHA の tarball を取る。ブランチ名で取ると、その間に push が入ったとき `source.json` の SHA と中身がずれる。
 - 採らなかった方法: CI で `index.sqlite` を作って Dockerfile で `COPY` する。手元の `docker build` だけでは DB が無いか古くなる。
 
 ### MCP の実装
@@ -142,32 +197,71 @@ flowchart LR
 
 1. 先頭の YAML（`---` で囲まれた GitBook のページ設定。3 ページにある）を捨てる。
 2. `{% hint style="..." %}` ブロックを、直前の条文の続きとして本文に残す。`warning` / `danger` は「例外:」、`info` / `success` は「例:」を頭に付ける。**hint には条文を打ち消す例外が入っている**（例: `game-mechanics-damage.md` の規則 13 と、その直後の Immortality の例外）。捨てたり条文と切り離したりすると誤答になる。
-3. `<img>` タグと `&#x20;` を消す。画像はモデルに渡さない。
-4. 各条文に**引用 ID**（回答で出典として示す識別子）を振る。書式は `ページID#節の見出し:番号`。例: `game-mechanics-damage#General Rules:10.a.i`。
-   - 番号はページ内の `####` 節ごとに 1 から振り直されている。ルール文書に通し番号はない。
-   - 入れ子の番号は GitBook の表示に合わせて `10.a.i` と書く。ルール本文の中の相互参照（「rule 10.a.i」）がこの書式で、ページ内を指している。
-5. ページは分割しない。1 ページを 1 行として保存し、そのまま返す。最大でも 3,232 トークンなので分割する理由がなく、分割すると hint と条文が離れる。
-6. 用語集の 2 ファイルだけは `####` 節ごとに分けて保存する。ファイル丸ごとだと 1 万トークンを超える。
+3. `<img>` タグ・Markdown の画像（`![](...)`）・`&#x20;` を消す。画像はモデルに渡さない。画像を消して空になった `####` 見出しは節として扱わず、その下の条文は直前の節に含める（`game-mechanics-mastery.md:88` の `Shifting Currents` の図）。
+4. ページを **ページ → 節 → 条文** の 3 層に分ける。
+   - 節は `####` 見出し 1 つ。`General Rules:` のような全般の決まりの節と、`Bulwark` のように 1 つの概念を定義する節がある。同じページに同じ見出しは無い（実測）。
+   - 条文は番号付きの項目 1 つ（約 1,500）。入れ子の番号は GitBook の表示に合わせて `10.a.i` と書く。ルール本文の中の相互参照（「rule 10.a.i」）がこの書式で、ページ内を指している。番号は節ごとに 1 から振り直され、ルール文書に通し番号はない。
+   - hint は直前の条文に含める（手順 2）。
+5. 節と条文に**引用 ID**（回答で出典として示す識別子）を振る。節は `ページID#見出し`、条文は `ページID#見出し:番号`。例: `game-mechanics-damage#General Rules:10.a.i`。
+6. 本文中のリンク（`SUMMARY.md` を除き約 190 本）を引用 ID に書き換え、結び付き（`clause_link`）としても記録する。
+   - `[inner lineage](../game-mechanics/.../game-zones-object-specific-zones.md#inner-lineage)` → `[inner lineage](game-zones-object-specific-zones#Inner Lineage)`。相対パスのままではモデルがどのツールで開けばよいか分からない。
+   - リンクは書き手が示した結び付きなので、同じ名前の定義が複数ある用語（`Lineage (term)` と `Lineage (Keyword)`）でも、どちらを指すかが確定する。
+   - `#` の後は GitBook が見出しから作るアンカー（小文字・記号除去・空白をハイフン）か、見出しに埋め込まれた `<a id="...">`。リンク先の節が無いリンクが 3 本ある（見出しの名前が変わってリンクが古いまま）。「データの誤りの修正」で直す。
+   - 画像へのリンク（`.gitbook/assets/`）は捨てる。
+7. ページ本文は分割せずに `rule_page.body` にも持ち、`get_rules_page` はページを丸ごと返す。最大でも 3,232 トークンで収まる。
 
 ### カードの取り込み
 
-- `GET https://api.gatcg.com/cards/search?page_size=50&page=N` を `has_more` が false になるまで呼ぶ（約 50 回）。`page_size` の上限は 50。
+- `GET https://api.gatcg.com/cards/search?page_size=50&page=N` を `total_pages`（約 50）まで呼ぶ。`page_size` の上限は 50。
+- 1 ページに約 2.5 秒かかる。順に呼ぶと 1 分 40 秒、5 本ずつ並べると 40 秒。10 本並べても 1 本あたりが遅くなるだけなので、取得先の負担を考えて 5 本にする。
+- 連結した件数が応答の `total_cards` と一致しなければ失敗させる。ページの取りこぼしは HTTP のエラーにならない。
 - 既定の User-Agent では 403 が返る（Python の `urllib` で確認）。User-Agent を明示する。
-- 保存する列: `slug`, `name`, `types`, `subtypes`, `classes`, `elements`, `cost_reserve`, `cost_memory`, `level`, `power`, `life`, `durability`, `speed`, `effect_raw`, `effect`。
+- 保存する列: `slug`, `name`, `types`, `subtypes`, `classes`, `elements`, `cost`, `level`, `power`, `life`, `durability`, `speed`, `effect_raw`, `rule`, `references`, `legality`。API の応答は 1 枚約 12KB あるが、残すのは 1 枚 1KB 未満。
+  - 元素は `elements` だけを残す。`element` は 1 つしか持たず、84 枚で `elements` と食い違う。
+    - Exalted のカード 80 枚: `element` は `EXALTED` だけで、`elements` は `["EXALTED", "FIRE"]` など。Exalted のカードは他の元素も併せ持ち、プレイには両方が要る（`game-mechanics-special-elements.md` の Exalted 2・3）。`element` を渡すと Fire などの条件が抜けて誤答する。
+    - マスタリー 4 枚: `element` は `NORM` で、`elements` は `[]`。マスタリーはプレイしない（`game-mechanics-mastery.md` の 3）ので、元素なしで正しい。
+  - コストは `cost`（`{type, value}`）を使う。`cost_reserve` / `cost_memory` は X コストを `-1` で表し（`sidereal-spellshot` など）、そのまま渡すと「コスト −1」と誤答する。
+  - `legality` はフォーマット（STANDARD / PANTHEON / DRAFT）ごとの禁止で、149 枚にある。学習データの古い禁止リストで答えさせないために残す。
+- 捨てる列
+  - `editions` / `result_editions`: 印刷ごとの情報（セット・レアリティ・画像・foil）で、応答の 9 割以上を占める。印刷面の効果テキストは 209 枚で上の `effect_raw` と違う（古い印刷や注釈文の省略。71 枚は ERRATA の裁定あり）。答えの根拠は `effect_raw` と裁定にする。
+  - `effect` / `effect_html`: `effect_raw` と同じ内容の Markdown 版（カード名が `CARDNAME`）と HTML 版。太字は用語の抽出に使わない。
+  - `element`: 上記のとおり `elements` で足り、Exalted のカードで条件が落ちる。
+  - `referenced_by`: `references` の逆向き。索引では結合で引ける。`references` にあって `referenced_by` に無い組が 5 件あるので、`references` を正とする。
+  - `flavor`, `uuid`, `created_at`, `last_update`。
 - `rule`（公式裁定）と `references`（`kind` が SUMMON / STATUS / MASTERY / GENERATE / REFERENCE / BREW）は別テーブルに展開する。
 
 ### 用語の抽出（リンクを張る処理）
 
-カード・裁定・ルールページと、用語の定義とを結ぶ。すべてビルド時の文字列照合で、実行時には計算しない。
+条文・カード・裁定と、用語やカード名とを結ぶ。すべてビルド時の文字列照合で、実行時には計算しない。
 
-- **語彙**: 全ページの `####` 見出しと、ページ題の最後の区切り（`# Game Zones - Intent` → `Intent`）から作る。約 300 語。用語集の見出しだけでは足りない。`Omen` は `game-mechanics-counters.md` の節に、`Intent` は 1 ページ丸ごとに定義があり、用語集には無い。
+- **語彙**: 全ページの `####` 見出しと、ページ題の最後の区切り（`# Game Zones - Intent` → `Intent`）から作る。約 316 語。用語集の見出しだけでは足りない。`Omen` は `game-mechanics-counters.md` の節に、`Intent` は 1 ページ丸ごとに定義があり、用語集には無い。
+  - `General Rules` / `General Rules:` の節（80 個）は用語にしない。
+  - 見出しから機械的に名前を作る。`<a id>` を外し、末尾の ` N`（`Critical N`）と括弧の補足（`Lineage (term)`）を外す。`/` と `and` で並んだ語（`Activate/Activating`・`Died/Dies and Kills/Killed`）は別名として持つ。
+- **名前と定義の場所を分ける**: 同じ名前の定義が複数の場所にある。`Bulwark`（カウンターとキーワード能力）・`Durability`（ステータスとカウンター）・`Lineage`（用語とキーワード能力）は意味が違い、`Redirect`・`Last-Known Information` は詳しい説明と用語集の要約。本文の「Bulwark」がどちらの意味かは文字列の照合では決められないので、本文の語は名前（`term`）に結び、`get_term` は定義（`term_definition`）をすべて返して、文脈からモデルに選ばせる。定義を 1 つに絞ると、カウンターとしての意味などが消える。
+- **当たったものはすべて記録する**: 1 枚あたり中央値 7 語、上位 10% で 10 語当たり、大半は `Champion`（942 枚）・`Target`（773 枚）のような基本語。索引には事実をすべて持たせ、何を見せるか（当たるカードが少ない順に上位 N 語など）はツールの側で決める。除外リストやしきい値を索引に埋め込むと、使ってみて変えたいときに取り込みからやり直しになる。
+- **記録する単位**: ルール文書は条文単位で結ぶ（`clause_term`・`clause_card`）。ページ単位では「どの条文か」を後から復元できず、モデルが最大 3,000 トークンのページを丸ごと読むことになる。ページ単位が欲しいときは条文からたどる。
 - **照合規則**
   - 大文字小文字を無視し、単語境界を付ける。
   - 複数形（末尾の `s`）も当てる。本文は `omens` と書く。
   - 長い語から先に当てる。短い語から当てると `Element Bonus` の中の `Element` を別の用語として二重に数える。
   - `effect` の太字（`**...**`）は使わない。`Class Bonus` は 906 枚に出るのに一度も太字になっておらず、逆に `On Enter:` のようにコロン込みで太字になった語が混ざる。
 - **目で確かめる語**: `Link`・`Command`・`Brew`・`Vigor` のように一般語と紛れる短い語は、抽出結果を一度目視で確かめる。
-- **カード名**: ルール本文にカード名が出る箇所も結ぶ。2 語以上かつ 8 文字以上の名前に限る（2,392 / 2,495 件）。短い名前は一般語と衝突する。2,392 語を一括で当てるので Aho-Corasick か正規表現の alternation を使う。
+- **カード名**: 条文と裁定にカード名が出る箇所も結ぶ。2 語以上かつ 8 文字以上の名前に限る（2,392 / 2,495 件）。短い名前は一般語と衝突する。いまのルール文書では 59 枚・31 ページに出る。`Divine Comedy` などのマスタリーは、効果の説明が `game-mechanics-mastery.md` にしか無い。
+- **照合器**: 用語約 316 語・カード名 2,392 語を、条文約 1,500・カード 2,495 枚・裁定 642 件に当てる規模なので、正規表現の選択（`|`）に長い語から並べれば足りる。Aho-Corasick のライブラリは入れない。
+- **カード同士の参照**は API の `references` だけを使う。効果テキストからカード名は拾わない。
+
+### データの誤りの修正
+
+取得元のデータに誤りと思われるものがあれば、推測で補正せず、リポジトリの修正の一覧（`src/build/domain/corrections/`）に 1 件ずつ明示して直す。
+
+- 1 件ごとに、どのデータの・どの値を・何に直すか・なぜ直すかを書く。
+- 修正は `build:index` で適用する。`data/` は取得した原本のままにし、何を直したかがコードを読めば分かるようにする。
+- 一覧に無い異常（参照先のカードが無い・リンク先の節が無いなど）が見つかったらビルドを止める。人が確かめて一覧に足してから、もう一度ビルドする。止まっても、動いているサーバーは前の索引のまま動き続ける。
+- 一覧の項目が当たらなくなったら（取得元で直った、または別の値に変わった）、その項目を名指ししてビルドを止める。後者を見逃さないため、人が確かめてから一覧から消す。
+- 2026-10 時点で一覧に入れるもの
+  - カード参照の slug `crystal-mastery` → `fractured-memories`（5 本。参照の `name` は `Fractured Memories` で、API に `crystal-mastery` は無く 404）。
+  - リンク先の節が無いリンク 3 本: `game-terms.md#negated`、`game-terms.md#have-gain-get-become-are`、`general-rules-card-characteristics/#changing-characteristics-type-overwriting-and-type-setting`。
+- 採らなかった方法: slug で見つからなければ名前で探す、のような自動の補正。どのデータをどう直したかがコードに残らず、別の壊れ方も黙って通してしまう。
 
 ## データベース
 
@@ -175,47 +269,85 @@ SQLite 1 ファイル。通常のテーブルと結合と FTS5（全文検索）
 
 ```mermaid
 erDiagram
-    rule_page ||--o{ page_term : ""
-    rule_page ||--o{ page_card : ""
-    term ||--o{ page_term : ""
+    rule_page ||--o{ rule_section : ""
+    rule_section ||--o{ rule_clause : ""
+    rule_clause ||--o{ clause_term : ""
+    rule_clause ||--o{ clause_card : ""
+    rule_clause ||--o{ clause_link : "from"
+    rule_page ||--o{ clause_link : "to"
+    term ||--o{ term_alias : ""
+    term ||--o{ term_definition : ""
+    rule_page ||--o{ term_definition : ""
+    term ||--o{ clause_term : ""
     term ||--o{ card_term : ""
     term ||--o{ ruling_term : ""
     card ||--o{ card_term : ""
     card ||--o{ card_ruling : ""
-    card ||--o{ card_reference : ""
-    card ||--o{ page_card : ""
+    card ||--o{ card_reference : "from / to"
+    card ||--o{ clause_card : ""
+    card ||--o{ ruling_card : ""
     card_ruling ||--o{ ruling_term : ""
+    card_ruling ||--o{ ruling_card : ""
 
     rule_page {
         text page_id PK "例 game-mechanics-damage"
         text title
-        text body
+        text body "hint 展開・リンク書き換え済み"
+    }
+    rule_section {
+        text section_id PK "例 game-mechanics-damage#General Rules"
+        text page_id FK
+        text heading
+    }
+    rule_clause {
+        text clause_id PK "例 game-mechanics-damage#General Rules:10.a.i"
+        text section_id FK
+        text number "10.a.i"
+        text text "hint を含む"
+    }
+    clause_link {
+        text clause_id FK
+        text page_id FK "リンク先のページ"
+        text section_id FK "リンク先の節。ページ全体なら NULL"
     }
     term {
-        text term PK
-        text page_id
-        text section "節の見出し。ページ全体なら空"
-        text body
+        int term_id PK
+        text name "例 Activate"
+    }
+    term_alias {
+        int term_id FK
+        text alias "例 Activating"
+    }
+    term_definition {
+        int term_id FK
+        text page_id FK
+        text section_id FK "ページ全体の定義なら NULL"
     }
     card {
         text slug PK
-        text name "ほかカードの列"
+        text name "ほかは「カードの取り込み」の列"
     }
     card_ruling {
-        int id PK
-        text card_slug
+        int ruling_id PK
+        text card_slug FK
         text date_added
         text title "ERRATA など"
         text description
     }
     card_reference {
-        text from_slug
-        text to_slug
+        text from_slug FK
+        text to_slug FK
         text kind
     }
 ```
 
-`rule_page` と `card` には FTS5 の仮想テーブルを並べる。トークナイザは既定の `unicode61` に porter stemmer を足す。本文が英語なので日本語のトークナイザは要らない。
+- `clause_term` / `card_term` / `ruling_term` は（相手, `term_id`）、`clause_card` / `ruling_card` は（相手, `card_slug`）の組だけを持つ。
+- 裁定はカード 1 枚に対して複数（1 対多）で持つ。642 件の文面は 424 種類しかなく、43 枚に同じ文面が付く裁定もある（「Cards in banishment with omen counters on them are omens.」）が、文面でまとめない。取得元が裁定をカードごとに持ち、日付もカードごとに違い（Cardistry の裁定は 2025-06-27 と 2025-12-04）、ERRATA はカードごとの文面の修正だから。同じ文面が検索結果に並ぶのは、返すときに 1 件にまとめて「付いているカード: 43 枚」と添えて防ぐ。
+- 裁定はカード名を知らなくても見つかるようにする。上の omen の裁定は、効果テキストにもルール文書にも無く、裁定の中にしか無い。
+- 配列の列（`types`・`classes`・`elements` など）と `cost`・`legality` は JSON の文字列で `card` に持つ。名前の一覧で、それ自体に何かを結ぶことが無い。
+- 外部キーの制約を付ける。参照先が無い行は「データの誤りの修正」で直すか、ビルドを止める。
+
+`rule_clause`・`card`・`card_ruling` に FTS5 の仮想テーブルを並べる。トークナイザは既定の `unicode61` に porter stemmer を足す。本文が英語なので日本語のトークナイザは要らない。`search_rules` が条文単位で返すので、全文検索も条文単位にする。
 
 graph DB は使わない。参照は最大 2 ホップで閉路が無く、結合 1〜2 回で辿れる。将来深くなっても SQLite の `WITH RECURSIVE` で辿れる。
 
@@ -227,8 +359,8 @@ graph DB は使わない。参照は最大 2 ホップで閉路が無く、結�
 | ------------------------- | ------------------------------------------------------------------------------- | ------------------------- | ---------------------- |
 | `get_game_overview()`     | ゲームの概要（次節）と、目次を「題 \| ページID」にしたもの                      | —                         | 約 5,500 トークン      |
 | `get_rules_page(page_id)` | ページ丸ごと（hint を展開済み）                                                 | 画像                      | 最大 3,232             |
-| `get_term(term)`          | 用語の定義 1 つ（節、またはページ）                                             | 用語集ファイル丸ごと      | 用語集の節なら最大 546 |
-| `search_rules(query)`     | 上位 10 件の引用 ID・題・該当する 1 行                                          | 本文                      | 約 500                 |
+| `get_term(term)`          | 用語の定義すべて（節、またはページ。同じ名前の定義が複数あれば全部）            | 用語集ファイル丸ごと      | 用語集の節なら最大 546 |
+| `search_rules(query)`     | 条文と裁定から上位 10 件の引用 ID・題・該当する 1 行                            | 本文                      | 約 500                 |
 | `search_cards(...)`       | 1 枚 1 行（名前・種別・クラス・元素・コスト・効果の冒頭）を最大 20 件と、総件数 | 効果全文・裁定            | 20 件で約 700          |
 | `get_card(names)`         | 最大 5 枚。保存した列・裁定全件・用語名とその引用 ID・参照先カード名            | 用語の本文、API の生 JSON | 1 枚約 340             |
 
