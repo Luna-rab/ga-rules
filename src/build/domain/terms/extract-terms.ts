@@ -33,13 +33,9 @@ export function extractTerms(pages: Page[]): Term[] {
     }
   }
   // 最初の #### より前の本文は、ページ題の最後の区切りを見出しにした節になる（parseRules）。
-  // その節から定義ができたページには、同じ用語にページ全体の定義を重ねて足さない
+  // その節の定義とは別に、ページ全体を指す定義も足す。get_term は定義をすべて返す
   for (const page of pages) {
-    const title = page.title.split(" - ").at(-1)!;
-    const name = splitHeading(title)[0];
-    const existing = name === undefined ? undefined : byName.get(name.toLowerCase());
-    if (existing?.definitions.some((d) => d.pageId === page.pageId)) continue;
-    add(title, { pageId: page.pageId, sectionId: null });
+    add(page.title.split(" - ").at(-1)!, { pageId: page.pageId, sectionId: null });
   }
 
   return [...byName.values()];
