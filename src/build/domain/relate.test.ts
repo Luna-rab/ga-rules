@@ -76,7 +76,7 @@ describe("toRulings", () => {
     ]);
 
     expect(rulings).toHaveLength(2);
-    expect(rulings.map((r) => r.rulingId).sort()).toEqual([1, 2]);
+    expect(rulings.map((r) => r.rulingId).toSorted((a, b) => a - b)).toEqual([1, 2]);
     expect(rulings).toContainEqual({
       rulingId: expect.any(Number),
       cardSlug: "a-card",
@@ -107,12 +107,12 @@ describe("toRulings", () => {
       }),
     ]);
 
-    expect(rulings.map((r) => r.rulingId).sort()).toEqual([1, 2, 3]);
+    expect(rulings.map((r) => r.rulingId).toSorted((a, b) => a - b)).toEqual([1, 2, 3]);
     expect(
       rulings
         .filter((r) => r.cardSlug === "a-card")
         .map((r) => r.description)
-        .sort(),
+        .toSorted((a, b) => a.localeCompare(b)),
     ).toEqual(["One.", "Two."]);
     expect(rulings.some((r) => r.cardSlug === "no-rule")).toBe(false);
   });
@@ -155,6 +155,25 @@ describe("relate", () => {
       rulings: [],
     });
 
+    expect(rel.clauseCards).toEqual([{ clauseId: "p#S:1", cardSlug: "fractured-memories" }]);
+  });
+
+  test("条文のリンク先にだけある語は当てず、リンクの表示文字列の語は当てる", () => {
+    const rel = relate({
+      pages: [
+        pageWith([
+          "Put [an omen](game-mechanics-counters#Bulwark) on [Fractured Memories](cards#Nameless Champion).",
+        ]),
+      ],
+      terms: [term(1, "Omen"), term(2, "Bulwark")],
+      cards: [
+        card("fractured-memories", "Fractured Memories"),
+        card("nameless-champion", "Nameless Champion"),
+      ],
+      rulings: [],
+    });
+
+    expect(rel.clauseTerms).toEqual([{ clauseId: "p#S:1", termId: 1 }]);
     expect(rel.clauseCards).toEqual([{ clauseId: "p#S:1", cardSlug: "fractured-memories" }]);
   });
 
@@ -219,21 +238,9 @@ describe("relate", () => {
   });
 
   test("参照先の slug のカードが無いと、元と参照先の slug を message に含む DataError", () => {
-    const run = () =>
-      relate({
-        pages: [],
-        terms: [],
-        cards: [
-          card("merlin-amethysts-glow", "Merlin, Amethyst's Glow", {
-            references: [ref("crystal-mastery", "MASTERY")],
-          }),
-        ],
-        rulings: [],
-      });
-
-    expect(run).toThrow(DataError);
-    expect(run).toThrow(/merlin-amethysts-glow/);
-    expect(run).toThrow(/crystal-mastery/);
+    expect(relateWithMissingReference).toThrow(DataError);
+    expect(relateWithMissingReference).toThrow(/merlin-amethysts-glow/);
+    expect(relateWithMissingReference).toThrow(/crystal-mastery/);
   });
 
   test("各結び付きの配列に同じ組が 2 度入らない", () => {
@@ -270,6 +277,20 @@ describe("relate", () => {
   });
 });
 
+// merlin-amethysts-glow が、どのカードにも無い slug crystal-mastery を参照する
+function relateWithMissingReference() {
+  return relate({
+    pages: [],
+    terms: [],
+    cards: [
+      card("merlin-amethysts-glow", "Merlin, Amethyst's Glow", {
+        references: [ref("crystal-mastery", "MASTERY")],
+      }),
+    ],
+    rulings: [],
+  });
+}
+
 function sortBy<T>(rows: T[]): T[] {
-  return [...rows].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  return rows.toSorted((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
 }

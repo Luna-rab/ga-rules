@@ -100,10 +100,43 @@ describe("extractTerms", () => {
 
     const died = find(terms, "Died");
     expect(died).toBeDefined();
-    expect([...(died?.aliases ?? [])].sort()).toEqual(["Dies", "Killed", "Kills"]);
+    expect((died?.aliases ?? []).toSorted((a, b) => a.localeCompare(b))).toEqual(["Dies", "Killed", "Kills"]);
     expect(died?.definitions).toEqual([
       { pageId: "game-terms", sectionId: "game-terms#Died/Dies and Kills/Killed" },
     ]);
+  });
+
+  test("カンマで並んだ見出しは分けず、末尾にカンマの残る名前を作らない", () => {
+    const heading = "Copying Abilities, Card Activations, and Materializations";
+    const terms = extractTerms([page("game-terms", "Glossary - Game Terms", [heading])]);
+
+    const copying = find(terms, heading);
+    expect(copying?.aliases).toEqual([]);
+    expect(copying?.definitions).toEqual([
+      { pageId: "game-terms", sectionId: `game-terms#${heading}` },
+    ]);
+    expect(terms.some((t) => [t.name, ...t.aliases].some((n) => n.endsWith(",")))).toBe(false);
+    expect(find(terms, "Copying Abilities")).toBeUndefined();
+  });
+
+  test("`/` を含まない ` and ` の見出しは分けず、見出しのまま名前にする", () => {
+    const terms = extractTerms([
+      page("game-concepts", "Game Concepts", [
+        "Control and Ownership",
+        "Properties and States of Objects",
+      ]),
+    ]);
+
+    const control = find(terms, "Control and Ownership");
+    expect(control?.aliases).toEqual([]);
+    expect(control?.definitions).toEqual([
+      { pageId: "game-concepts", sectionId: "game-concepts#Control and Ownership" },
+    ]);
+    const properties = find(terms, "Properties and States of Objects");
+    expect(properties?.aliases).toEqual([]);
+    expect(find(terms, "Control")).toBeUndefined();
+    expect(find(terms, "Ownership")).toBeUndefined();
+    expect(find(terms, "Properties")).toBeUndefined();
   });
 
   test("見出し General Rules の節からは Term を作らない", () => {
@@ -129,6 +162,21 @@ describe("extractTerms", () => {
     expect(find(terms, "Game Zones")).toBeUndefined();
   });
 
+  test("ページ題の最後の区切りと同じ名前の節があると、節の定義と sectionId null の定義の 2 件になる", () => {
+    const terms = extractTerms([
+      page("game-zones-intent", "Game Zones - Intent", ["Intent", "Declaring Intent"]),
+    ]);
+
+    expect(terms.filter((t) => t.name.toLowerCase() === "intent")).toHaveLength(1);
+    const intent = find(terms, "Intent");
+    expect(intent?.definitions).toHaveLength(2);
+    expect(intent?.definitions).toContainEqual({
+      pageId: "game-zones-intent",
+      sectionId: "game-zones-intent#Intent",
+    });
+    expect(intent?.definitions).toContainEqual({ pageId: "game-zones-intent", sectionId: null });
+  });
+
   test("termId は 1 から振り、重ならない", () => {
     const terms = extractTerms([
       page("game-mechanics-counters", "Game Mechanics - Counters", ["Bulwark", "Omen"]),
@@ -136,7 +184,7 @@ describe("extractTerms", () => {
       page("game-zones-intent", "Game Zones - Intent", []),
     ]);
 
-    const ids = terms.map((t) => t.termId).sort((a, b) => a - b);
+    const ids = terms.map((t) => t.termId).toSorted((a, b) => a - b);
     expect(ids[0]).toBe(1);
     expect(new Set(ids).size).toBe(ids.length);
   });

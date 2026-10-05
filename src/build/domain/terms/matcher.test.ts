@@ -2,17 +2,17 @@ import { describe, expect, test } from "bun:test";
 import { Matcher } from ".";
 
 function sorted(keys: string[]): string[] {
-  return [...keys].sort();
+  return keys.toSorted((a, b) => a.localeCompare(b));
+}
+
+function elements(): Matcher<string> {
+  return new Matcher([
+    { key: "Element", names: ["Element"] },
+    { key: "Element Bonus", names: ["Element Bonus"] },
+  ]);
 }
 
 describe("Matcher", () => {
-  function elements(): Matcher<string> {
-    return new Matcher([
-      { key: "Element", names: ["Element"] },
-      { key: "Element Bonus", names: ["Element Bonus"] },
-    ]);
-  }
-
   test("長い名前を先に当て、当たった範囲に短い名前を当てない", () => {
     expect(elements().match("gains element bonus")).toEqual(["Element Bonus"]);
   });
@@ -51,7 +51,7 @@ describe("Matcher", () => {
       { key: 1, names: ["Activate", "Activating"] },
       { key: 2, names: ["Omen"] },
     ]);
-    expect(m.match("Activating an omen. Activate another Omen.").sort()).toEqual([1, 2]);
+    expect(m.match("Activating an omen. Activate another Omen.").toSorted((a, b) => a - b)).toEqual([1, 2]);
   });
 
   test("当たる名前が無ければ空", () => {
