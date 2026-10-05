@@ -27,13 +27,15 @@ export function extractTerms(pages: Page[]): Term[] {
     }
   };
 
+  // 語彙にするのは `####` の節だけ。`###`・行頭の太字の節（minor）は規則の小見出しで用語ではなく、
+  // 最初の見出しより前の本文の節（lead）は、下のページ題の定義と同じ語になる
   for (const page of pages) {
     for (const section of page.sections) {
+      if (section.kind !== "heading") continue;
       add(section.heading, { pageId: page.pageId, sectionId: section.sectionId });
     }
   }
-  // 最初の #### より前の本文は、ページ題の最後の区切りを見出しにした節になる（parseRules）。
-  // その節の定義とは別に、ページ全体を指す定義も足す。get_term は定義をすべて返す
+  // ページ題の定義はページ全体を指す。get_term は定義をすべて返す
   for (const page of pages) {
     add(page.title.split(" - ").at(-1)!, { pageId: page.pageId, sectionId: null });
   }

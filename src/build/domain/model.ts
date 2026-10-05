@@ -10,7 +10,15 @@ export type Clause = {
   text: string; // hint 展開・画像除去・リンク書き換え済み
   links: LinkTarget[];
 };
-export type Section = { sectionId: string; pageId: string; heading: string; clauses: Clause[] };
+// heading は `####`、minor は `###` と行頭の太字、lead は最初の見出しより前の本文
+export type SectionKind = "heading" | "minor" | "lead";
+export type Section = {
+  sectionId: string;
+  pageId: string;
+  heading: string;
+  kind: SectionKind;
+  clauses: Clause[];
+};
 export type Page = { pageId: string; title: string; body: string; sections: Section[] };
 
 // data/cards/<slug>.json と同じ形（列名もそのまま）

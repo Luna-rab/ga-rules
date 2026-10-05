@@ -1,9 +1,14 @@
 import type { Correction } from "../corrections";
 import { DataError } from "../errors";
-import type { Clause, LinkTarget, Page, RawPage, Section } from "../model";
+import type { Clause, LinkTarget, Page, RawPage, Section, SectionKind } from "../model";
 
 type DraftClause = { number: string; lines: string[] };
-type DraftSection = { heading: string; anchorIds: string[]; clauses: DraftClause[] };
+type DraftSection = {
+  heading: string;
+  kind: SectionKind;
+  anchorIds: string[];
+  clauses: DraftClause[];
+};
 type DraftPage = {
   path: string;
   pageId: string;
@@ -82,7 +87,12 @@ function splitPage(raw: RawPage): DraftPage {
 
   const ensureSection = (): DraftSection => {
     if (section) return section;
-    section = { heading: title.split(" - ").at(-1)?.trim() ?? title, anchorIds: [], clauses: [] };
+    section = {
+      heading: title.split(" - ").at(-1)?.trim() ?? title,
+      kind: "lead",
+      anchorIds: [],
+      clauses: [],
+    };
     sections.push(section);
     return section;
   };
@@ -99,8 +109,8 @@ function splitPage(raw: RawPage): DraftPage {
   let lastTop = 0;
   let afterHint = false;
   let shift = 0;
-  const startSection = (heading: string, anchorIds: string[]): void => {
-    section = { heading, anchorIds, clauses: [] };
+  const startSection = (heading: string, kind: SectionKind, anchorIds: string[]): void => {
+    section = { heading, kind, anchorIds, clauses: [] };
     sections.push(section);
     clause = null;
     stack = [];
@@ -113,16 +123,16 @@ function splitPage(raw: RawPage): DraftPage {
     const line = lines[i] ?? "";
     // `####` に加え、`###` と行頭の太字（`**Leveling Up**`・`**1.1 Announcing Activation**: ...`）も
     // 節の区切りにする。どれも下で番号付きリストが 1 から振り直される
-    const heading = /^#{3,4} (.*)$/.exec(line);
+    const heading = /^(#{3,4}) (.*)$/.exec(line);
     if (heading) {
-      const h = cleanHeading(heading[1] ?? "");
+      const h = cleanHeading(heading[2] ?? "");
       // 画像を消して空になった見出しは節にせず、直前の節を続ける
       if (h.heading === "") {
         afterHint = false;
         shift = 0;
         continue;
       }
-      startSection(h.heading, h.anchorIds);
+      startSection(h.heading, heading[1] === "####" ? "heading" : "minor", h.anchorIds);
       continue;
     }
     const bold = /^\*\*([^*]+)\*\*(.*)$/.exec(line);
@@ -133,7 +143,7 @@ function splitPage(raw: RawPage): DraftPage {
       if (boldHeading === "") {
         afterHint = false;
         shift = 0;
-      } else startSection(boldHeading, []);
+      } else startSection(boldHeading, "minor", []);
       if (rest !== "") ensureClause().lines.push(rest);
       continue;
     }
@@ -250,7 +260,7 @@ function buildPage(d: DraftPage, resolver: LinkResolver): Page {
       const { text, links } = resolver.rewrite(d.path, c.lines.join("\n"));
       return { clauseId, sectionId, number: c.number, text, links };
     });
-    return { sectionId, pageId: d.pageId, heading: s.heading, clauses };
+    return { sectionId, pageId: d.pageId, heading: s.heading, kind: s.kind, clauses };
   });
   const body = resolver.rewrite(d.path, d.body).text;
   return { pageId: d.pageId, title: d.title, body, sections };
