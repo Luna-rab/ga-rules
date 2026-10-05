@@ -594,3 +594,102 @@ describe("parseRules: リンク", () => {
     });
   });
 });
+
+describe("parseRules: <...> で囲んだ画像とリンク、/ で始まるリンク、空になった太字", () => {
+  test("<...> で囲んだ画像は条文の text と Page.body に残らず、前後の文字は残る", () => {
+    const pages = parse([
+      { path: "p.md", markdown: "# P\n\n#### Sec\n\n1. x ![](<a (1).png>) z\n" },
+    ]);
+    const c1 = clause(pages, "p#Sec:1");
+    for (const text of [page(pages, "p").body, c1.text]) {
+      expect(text).not.toContain(".png");
+      expect(text).not.toContain("![](");
+    }
+    expect(c1.text).toContain("x");
+    expect(c1.text).toContain("z");
+  });
+
+  test("画像だけの太字は節にならず、その下の条文は直前の節に入る", () => {
+    const pages = parse([
+      { path: "p.md", markdown: "# P\n\n#### Sec\n\n1. X\n\n**![](x.png)**\n\n2. Y\n" },
+    ]);
+    expect(page(pages, "p").sections.map((s) => s.heading)).toEqual(["Sec"]);
+    expect(clause(pages, "p#Sec:2").text).toContain("Y");
+  });
+
+  test("<a> だけの太字は節にならず、条文は p#A:1 と p#A:2 になる", () => {
+    const pages = parse([
+      {
+        path: "p.md",
+        markdown: '# P\n\n#### A\n\n1. x\n\n**<a id="z"></a>**\n\n2. y\n',
+      },
+    ]);
+    expect(page(pages, "p").sections.map((s) => s.heading)).toEqual(["A"]);
+    expect(clauses(pages).map((c) => c.clauseId)).toEqual(["p#A:1", "p#A:2"]);
+    expect(clause(pages, "p#A:2").text).toContain("y");
+  });
+
+  test("<...> で囲んだリンク先は解決される", () => {
+    const pages = parse([
+      { path: "b/q.md", markdown: "# Q\n\n#### Sec\n\n1. Q.\n" },
+      { path: "a/p.md", markdown: "# P\n\n#### Sec\n\n1. See [l](<../b/q.md>).\n" },
+    ]);
+    const c1 = clause(pages, "p#Sec:1");
+    expect(c1.text).toContain("[l](q)");
+    expect(c1.links).toEqual([{ pageId: "q", sectionId: null }]);
+  });
+
+  test("/ で始まるリンクはルール文書の直下から解決される", () => {
+    const pages = parse([
+      { path: "b/q.md", markdown: "# Q\n\n#### Sec\n\n1. Q.\n" },
+      {
+        path: "g/t.md",
+        markdown: '# G - T\n\n#### Died <a href="#dies" id="dies"></a>\n\n1. Gone.\n',
+      },
+      {
+        path: "a/p.md",
+        markdown: "# P\n\n#### Sec\n\n1. See [x](/b/q.md).\n2. See [g](/g/t.md#dies).\n",
+      },
+    ]);
+    const c1 = clause(pages, "p#Sec:1");
+    expect(c1.text).toContain("[x](q)");
+    expect(c1.links).toEqual([{ pageId: "q", sectionId: null }]);
+    const c2 = clause(pages, "p#Sec:2");
+    expect(c2.text).toContain("[g](t#Died)");
+    expect(c2.links).toEqual([{ pageId: "t", sectionId: "t#Died" }]);
+  });
+});
+
+describe("parseRules: hint の後で書き直したリストの続き番号", () => {
+  const hint = '{% hint style="info" %}\nH\n{% endhint %}';
+
+  test("hint の前に 2 項目、後に 2 項目あると 1・2・3・4 になる", () => {
+    const pages = parse([
+      { path: "p.md", markdown: `# P\n\n#### S\n\n1. A\n2. B\n\n${hint}\n\n1. C\n2. D\n` },
+    ]);
+    expect(clauses(pages).map((c) => c.number)).toEqual(["1", "2", "3", "4"]);
+    expect(clause(pages, "p#S:3").text).toContain("C");
+    expect(clause(pages, "p#S:4").text).toContain("D");
+  });
+
+  test("hint の後のリストに入れ子があると 1・2・2.a・3 になる", () => {
+    const pages = parse([
+      { path: "p.md", markdown: `# P\n\n#### S\n\n1. A\n\n${hint}\n\n1. B\n   1. x\n2. C\n` },
+    ]);
+    expect(clauses(pages).map((c) => c.number)).toEqual(["1", "2", "2.a", "3"]);
+    expect(clause(pages, "p#S:2.a").text).toContain("x");
+    expect(clause(pages, "p#S:3").text).toContain("C");
+  });
+
+  test("書き直したリストの途中の箇条書きは直前の条文に入り、番号は 1・2・3 のまま続く", () => {
+    const pages = parse([
+      {
+        path: "p.md",
+        markdown: `# P\n\n#### S\n\n1. A\n\n${hint}\n\n1. B\n\n* bullet\n\n2. C\n`,
+      },
+    ]);
+    expect(clauses(pages).map((c) => c.number)).toEqual(["1", "2", "3"]);
+    expect(clause(pages, "p#S:2").text).toContain("* bullet");
+    expect(clause(pages, "p#S:3").text).toContain("C");
+  });
+});
