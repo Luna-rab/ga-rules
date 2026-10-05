@@ -25,6 +25,7 @@
                 "group": [
                   "bun:sqlite",
                   "node:*",
+                  "node:*/*",
                   "bun",
                   "bun/*",
                   "child_process",
