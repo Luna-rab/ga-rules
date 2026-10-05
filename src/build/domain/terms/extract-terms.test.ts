@@ -1,19 +1,22 @@
 import { describe, expect, test } from "bun:test";
-import type { Page, Term } from "../model";
+import type { Page, SectionKind, Term } from "../model";
 import { extractTerms, Matcher } from ".";
 
-// 条文は用語の抽出に使わないので、節は見出しだけを持たせる
-function page(pageId: string, title: string, headings: string[]): Page {
+// 条文は用語の抽出に使わないので、節は見出しと種類だけを持たせる。
+// 文字列だけ渡した節は #### の見出し（kind "heading"）
+function page(
+  pageId: string,
+  title: string,
+  headings: (string | [string, SectionKind])[],
+): Page {
   return {
     pageId,
     title,
     body: "",
-    sections: headings.map((heading) => ({
-      sectionId: `${pageId}#${heading}`,
-      pageId,
-      heading,
-      clauses: [],
-    })),
+    sections: headings.map((h) => {
+      const [heading, kind] = typeof h === "string" ? [h, "heading" as const] : h;
+      return { sectionId: `${pageId}#${heading}`, pageId, heading, kind, clauses: [] };
+    }),
   };
 }
 
@@ -24,8 +27,11 @@ function find(terms: Term[], name: string): Term | undefined {
 describe("extractTerms", () => {
   test("同じ見出し Bulwark の節が 2 ページにあると、Term は 1 つで definitions が 2 件", () => {
     const terms = extractTerms([
-      page("game-mechanics-counters", "Game Mechanics - Counters", ["Bulwark", "Omen"]),
-      page("keyword-abilities", "Keyword Abilities", ["Bulwark"]),
+      page("game-mechanics-counters", "Game Mechanics - Counters", [
+        ["Bulwark", "heading"],
+        ["Omen", "heading"],
+      ]),
+      page("keyword-abilities", "Keyword Abilities", [["Bulwark", "heading"]]),
     ]);
 
     expect(terms.filter((t) => t.name.toLowerCase() === "bulwark")).toHaveLength(1);
@@ -183,7 +189,10 @@ describe("extractTerms", () => {
 
   test("ページ題の最後の区切りと同じ名前の節があると、節の定義と sectionId null の定義の 2 件になる", () => {
     const terms = extractTerms([
-      page("game-zones-intent", "Game Zones - Intent", ["Intent", "Declaring Intent"]),
+      page("game-zones-intent", "Game Zones - Intent", [
+        ["Intent", "heading"],
+        ["Declaring Intent", "heading"],
+      ]),
     ]);
 
     expect(terms.filter((t) => t.name.toLowerCase() === "intent")).toHaveLength(1);
@@ -194,6 +203,36 @@ describe("extractTerms", () => {
       sectionId: "game-zones-intent#Intent",
     });
     expect(intent?.definitions).toContainEqual({ pageId: "game-zones-intent", sectionId: null });
+  });
+
+  test("語彙は heading の節とページ題だけから作り、lead と minor の節からは作らない", () => {
+    const terms = extractTerms([
+      page("game-zones-intent", "Game Zones - Intent", [
+        ["Intent", "lead"],
+        ["Declaring Intent", "heading"],
+        ["Leveling Up", "minor"],
+        ["1.1 Announcing Activation", "minor"],
+      ]),
+    ]);
+
+    expect(terms.map((t) => t.name).toSorted()).toEqual(["Declaring Intent", "Intent"]);
+    expect(find(terms, "Intent")?.definitions).toEqual([
+      { pageId: "game-zones-intent", sectionId: null },
+    ]);
+    expect(find(terms, "Declaring Intent")?.definitions).toEqual([
+      { pageId: "game-zones-intent", sectionId: "game-zones-intent#Declaring Intent" },
+    ]);
+  });
+
+  test("同じ見出しが別のページでは minor だと、heading の節の定義だけを持つ", () => {
+    const terms = extractTerms([
+      page("card-types-champion", "Card Types - Champion", [["Leveling Up", "minor"]]),
+      page("game-terms", "Glossary - Game Terms", [["Leveling Up", "heading"]]),
+    ]);
+
+    expect(find(terms, "Leveling Up")?.definitions).toEqual([
+      { pageId: "game-terms", sectionId: "game-terms#Leveling Up" },
+    ]);
   });
 
   test("termId は 1 から振り、重ならない", () => {

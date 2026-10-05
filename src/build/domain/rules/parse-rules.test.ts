@@ -70,6 +70,7 @@ describe("parseRules: ページ・節・条文と hint", () => {
       sectionId: "game-mechanics-damage#General Rules",
       pageId: "game-mechanics-damage",
       heading: "General Rules",
+      kind: "heading",
     });
   });
 
@@ -240,6 +241,40 @@ describe("parseRules: 節の分け方", () => {
     const c = clause(pages, "objectives#Objectives:1");
     expect(c.text).toContain("Win the game.");
     expect(clause(pages, "objectives#General Rules:1").text).toContain("Other.");
+  });
+
+  test("節の種類: 見出しより前の本文は lead、#### は heading、### と行頭の太字は minor", () => {
+    const pages = parse([
+      {
+        path: "playing-cards/playing-cards-card-activation.md",
+        markdown:
+          "# Playing Cards - Card Activation\n\nIntro.\n\n#### General Rules\n\n1. A\n\n### Standard Games\n\n1. B\n\n**1.1 Announcing Activation**: First.\n\n1. C",
+      },
+    ]);
+    const p = page(pages, "playing-cards-card-activation");
+    expect(p.sections.map((s) => [s.heading, s.kind])).toEqual([
+      ["Card Activation", "lead"],
+      ["General Rules", "heading"],
+      ["Standard Games", "minor"],
+      ["1.1 Announcing Activation", "minor"],
+    ]);
+  });
+
+  test("節の種類: 行頭の太字だけの行と、条文の無い ### も minor で、その後の #### は heading", () => {
+    const p = page(
+      parse([
+        {
+          path: "x.md",
+          markdown: "# M - X\n\n**Leveling Up**\n\n1. A\n\n### Masteries:\n\n#### Next\n\n1. B",
+        },
+      ]),
+      "x",
+    );
+    expect(p.sections.map((s) => [s.heading, s.kind])).toEqual([
+      ["Leveling Up", "minor"],
+      ["Masteries", "minor"],
+      ["Next", "heading"],
+    ]);
   });
 
   test("README.md のページ ID は親ディレクトリ名", () => {

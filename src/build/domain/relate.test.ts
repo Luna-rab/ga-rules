@@ -39,6 +39,7 @@ function pageWith(texts: string[]): Page {
         sectionId: "p#S",
         pageId: "p",
         heading: "S",
+        kind: "heading",
         clauses: texts.map((text, i) => ({
           clauseId: `p#S:${i + 1}`,
           sectionId: "p#S",
