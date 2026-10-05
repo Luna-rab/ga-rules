@@ -1,5 +1,5 @@
 # タグは package.json の packageManager と揃える。
-# 実行用の依存だけ。2 段目に開発用の依存（drizzle-kit など）を入れない。
+# --production の依存だけを入れる。最後の段（実行用）がこの node_modules をコピーする。
 FROM oven/bun:1.4.2 AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
@@ -11,7 +11,6 @@ FROM oven/bun:1.4.2 AS index
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
-COPY package.json ./
 COPY src/shared src/shared
 COPY src/build src/build
 # ビルドのたびに値を変えて、ここから下のキャッシュを捨てる。
