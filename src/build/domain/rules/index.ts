@@ -93,16 +93,39 @@ function splitPage(raw: RawPage): DraftPage {
     return clause;
   };
 
+  // hint だけを挟んで番号付きリストが書き直されたら（`1.` → hint → `1.`）、続き番号にする。
+  // hint は直前の条文に含めるので、リストは途切れていないものとして扱う
+  let lastTop = 0;
+  let afterHint = false;
+  const startSection = (heading: string, anchorIds: string[]): void => {
+    section = { heading, anchorIds, clauses: [] };
+    sections.push(section);
+    clause = null;
+    stack = [];
+    lastTop = 0;
+    afterHint = false;
+  };
+
   for (let i = titleAt + 1; i < lines.length; i++) {
     const line = lines[i] ?? "";
-    if (line.startsWith("#### ")) {
-      const h = cleanHeading(line.slice(5));
+    // `####` に加え、`###` と行頭の太字（`**Leveling Up**`・`**1.1 Announcing Activation**: ...`）も
+    // 節の区切りにする。どれも下で番号付きリストが 1 から振り直される
+    const heading = /^#{3,4} (.*)$/.exec(line);
+    if (heading) {
+      const h = cleanHeading(heading[1] ?? "");
       // 画像を消して空になった見出しは節にせず、直前の節を続ける
-      if (h.heading === "") continue;
-      section = { heading: h.heading, anchorIds: h.anchorIds, clauses: [] };
-      sections.push(section);
-      clause = null;
-      stack = [];
+      if (h.heading === "") {
+        afterHint = false;
+        continue;
+      }
+      startSection(h.heading, h.anchorIds);
+      continue;
+    }
+    const bold = /^\*\*([^*]+)\*\*(.*)$/.exec(line);
+    if (bold) {
+      startSection(cleanHeading(bold[1] ?? "").heading, []);
+      const rest = (bold[2] ?? "").replace(/^\s*:?\s*/, "").trim();
+      if (rest !== "") ensureClause().lines.push(rest);
       continue;
     }
     const hint = HINT_OPEN.exec(line);
@@ -112,15 +135,22 @@ function splitPage(raw: RawPage): DraftPage {
         const t = (lines[i] ?? "").trim();
         if (t !== "") body.push(t);
       }
+      if (i >= lines.length) throw new DataError(raw.path, `{% endhint %} が無い: ${line.trim()}`);
       const target = ensureClause();
       target.lines.push(hintPrefix(hint[1] ?? "") + body.join("\n"));
+      afterHint = true;
       continue;
     }
     const item = LIST_ITEM.exec(line);
     if (item) {
       const indent = (item[1] ?? "").length;
-      const n = Number(item[2]);
+      let n = Number(item[2]);
       while (stack.length > 0 && indent < (stack.at(-1)?.contentCol ?? 0) - 1) stack.pop();
+      if (stack.length === 0) {
+        if (afterHint && n <= lastTop) n = lastTop + 1;
+        lastTop = n;
+      }
+      afterHint = false;
       const label = formatNumber(n, stack.length);
       const number = [...stack.map((s) => s.label), label].join(".");
       stack.push({
@@ -133,6 +163,7 @@ function splitPage(raw: RawPage): DraftPage {
     }
     const text = line.trim();
     if (text === "") continue;
+    afterHint = false;
     ensureClause().lines.push(text);
   }
 
@@ -215,7 +246,8 @@ function buildPage(d: DraftPage, resolver: LinkResolver): Page {
 
 // --- リンクの解決と書き換え ---
 
-const LINK = /\[([^\]]*)\]\(([^)\s]*)\)/g;
+// ラベルは 1 段の角括弧の入れ子まで（`[a [b] c]`）。括弧の中は `href` か `href "title"`
+const LINK = /\[((?:[^[\]]|\[[^[\]]*\])*)\]\(\s*([^)\s]*)(?:\s+"[^"]*")?\s*\)/g;
 
 class LinkResolver {
   private readonly byPath = new Map<string, DraftPage>();
@@ -223,9 +255,35 @@ class LinkResolver {
   private readonly used = new Set<string>();
 
   constructor(pages: DraftPage[], corrections: readonly Correction[]) {
-    for (const p of pages) this.byPath.set(p.path, p);
+    const byPageId = new Map<string, DraftPage>();
+    for (const p of pages) {
+      const other = byPageId.get(p.pageId);
+      if (other) {
+        throw new DataError(p.path, `ページ ID ${p.pageId} が ${other.path} と重なる`);
+      }
+      byPageId.set(p.pageId, p);
+      this.byPath.set(p.path, p);
+    }
     for (const c of corrections) {
-      if (c.kind === "rule-link") this.fixes.set(fixKey(c.path, c.from), c);
+      if (c.kind !== "rule-link") continue;
+      const where = `correction rule-link ${c.path}`;
+      const key = fixKey(c.path, c.from);
+      if (this.fixes.has(key)) throw new DataError(where, `リンク ${c.from} の項目が重なる`);
+      if (c.to) {
+        const page = byPageId.get(c.to.pageId);
+        const sectionId = c.to.sectionId;
+        const found =
+          page &&
+          (sectionId === null ||
+            page.sections.some((s) => `${page.pageId}#${s.heading}` === sectionId));
+        if (!found) {
+          throw new DataError(
+            where,
+            `リンク ${c.from} の直し先 ${sectionId ?? c.to.pageId} が無い`,
+          );
+        }
+      }
+      this.fixes.set(key, c);
     }
   }
 
