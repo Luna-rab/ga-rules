@@ -112,7 +112,8 @@ describe("buildIndex", () => {
     );
 
     expect(error).toBeInstanceOf(DataError);
-    expect((error as DataError).message).toContain("no-such-section");
+    if (!(error instanceof DataError)) throw error;
+    expect(error.message).toContain("no-such-section");
     expect(existsSync(outPath)).toBe(false);
   });
 });
