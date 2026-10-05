@@ -36,8 +36,8 @@ function thrown(fn: () => unknown): DataError {
   try {
     fn();
   } catch (e) {
-    expect(e).toBeInstanceOf(DataError);
-    return e as DataError;
+    if (!(e instanceof DataError)) throw e;
+    return e;
   }
   throw new Error("DataError が投げられなかった");
 }
@@ -135,13 +135,38 @@ describe("CORRECTIONS", () => {
     }
   });
 
-  test("rule-link は 3 件で、path と from が空でない", () => {
-    const links = CORRECTIONS.filter((c) => c.kind === "rule-link");
-    expect(links).toHaveLength(3);
-    for (const c of links) {
-      expect(c.path.trim()).not.toBe("");
-      expect(c.from.trim()).not.toBe("");
-    }
+  // rule-link の件数は決めない（task5 が実データで見つけたものを足しうる）。既知の項目があることだけを確かめる
+  test.each([
+    {
+      path: "glossary/game-terms.md",
+      from: "game-terms.md#negated",
+      to: { pageId: "game-terms", sectionId: "game-terms#Negated" },
+    },
+    {
+      path: "general-rules/general-rules-card-types/card-types-supertypes.md",
+      from: "../general-rules-card-characteristics/#changing-characteristics-type-overwriting-and-type-setting",
+      to: {
+        pageId: "general-rules-card-characteristics",
+        sectionId: "general-rules-card-characteristics#Type-Overwriting and Type-setting",
+      },
+    },
+    {
+      path: "game-mechanics/game-mechanics-types-of-effects/types-of-effects-continuous-effects/README.md",
+      from: "../../../glossary/game-terms.md#have-gain-get-become-are",
+      to: null,
+    },
+    {
+      path: "game-mechanics/game-mechanics-types-of-effects/types-of-effects-continuous-effects/README.md",
+      from: "/broken/pages/d5fQPRV40fjs6PztDRCI",
+      to: {
+        pageId: "general-rules-card-characteristics",
+        sectionId: "general-rules-card-characteristics#General Rules",
+      },
+    },
+  ])("rule-link $from があり、path と to が合う", ({ path, from, to }) => {
+    const hits = CORRECTIONS.filter((c) => c.kind === "rule-link" && c.from === from);
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({ kind: "rule-link", path, from, to });
   });
 
   test("CORRECTIONS の card-reference は、該当する参照を持つカードに当てると全部当たる", () => {

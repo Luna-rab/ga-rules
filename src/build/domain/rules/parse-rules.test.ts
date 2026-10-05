@@ -27,14 +27,19 @@ function thrown(fn: () => unknown): DataError {
   try {
     fn();
   } catch (e) {
-    expect(e).toBeInstanceOf(DataError);
-    return e as DataError;
+    if (!(e instanceof DataError)) throw e;
+    return e;
   }
   throw new Error("DataError が投げられなかった");
 }
 
 const parse = (raw: RawPage[], corrections: readonly Correction[] = []) =>
   parseRules(raw, corrections);
+
+const withHint = (attrs: string): RawPage => ({
+  path: "p.md",
+  markdown: `# P\n\n#### General Rules\n\n1. Rule one.\n\n{% hint ${attrs} %}\nHinted text.\n{% endhint %}\n\n2. Rule two.\n`,
+});
 
 describe("parseRules: ページ・節・条文と hint", () => {
   const damage: RawPage = {
@@ -66,11 +71,6 @@ describe("parseRules: ページ・節・条文と hint", () => {
       pageId: "game-mechanics-damage",
       heading: "General Rules",
     });
-  });
-
-  const withHint = (attrs: string) => ({
-    path: "p.md",
-    markdown: `# P\n\n#### General Rules\n\n1. Rule one.\n\n{% hint ${attrs} %}\nHinted text.\n{% endhint %}\n\n2. Rule two.\n`,
   });
 
   test.each([
@@ -106,6 +106,37 @@ describe("parseRules: ページ・節・条文と hint", () => {
     expect(c0.text).toContain("例: Lead hint.");
     expect(clause(pages, "p#Sec:1").text).not.toContain("Lead hint.");
   });
+
+  test("hint だけを挟んで 1 から書き直された番号は続き番号になる", () => {
+    const pages = parse([
+      {
+        path: "p.md",
+        markdown:
+          '# P - Q\n\n#### General Rules\n\n1. A\n\n{% hint style="info" %}\nX\n{% endhint %}\n\n1. B',
+      },
+    ]);
+    const c1 = clause(pages, "p#General Rules:1");
+    expect(c1.number).toBe("1");
+    expect(c1.text).toContain("A");
+    expect(c1.text).toContain("例: X");
+    const c2 = clause(pages, "p#General Rules:2");
+    expect(c2.number).toBe("2");
+    expect(c2.text).toContain("B");
+    expect(c2.text).not.toContain("X");
+    expect(clauses(pages)).toHaveLength(2);
+  });
+
+  test("{% endhint %} の無い hint は、ファイルパスを添えて DataError", () => {
+    const e = thrown(() =>
+      parse([
+        {
+          path: "dir/unclosed.md",
+          markdown: '# P\n\n#### Sec\n\n1. A\n\n{% hint style="info" %}\nNever closed.\n\n2. B\n',
+        },
+      ]),
+    );
+    expect(e.message).toContain("dir/unclosed.md");
+  });
 });
 
 describe("parseRules: 入れ子の番号", () => {
@@ -131,6 +162,17 @@ describe("parseRules: 入れ子の番号", () => {
       { path: "p.md", markdown: "# P\n\n#### Sec\n\n10. A\n   1. B\n      1. C\n" },
     ]);
     expect(clauses(pages).map((c) => c.number)).toEqual(["10", "10.a", "10.a.i"]);
+  });
+
+  test("General Rules の節で clauseId が 10・10.a・10.a.i の 3 条文になる", () => {
+    const pages = parse([
+      { path: "p.md", markdown: "# P - Q\n\n#### General Rules\n\n10. A\n   1. B\n      1. C" },
+    ]);
+    expect(clauses(pages).map((c) => [c.clauseId, c.number])).toEqual([
+      ["p#General Rules:10", "10"],
+      ["p#General Rules:10.a", "10.a"],
+      ["p#General Rules:10.a.i", "10.a.i"],
+    ]);
   });
 
   test("節が変わると番号は 1 から振り直され、重なりにならない", () => {
@@ -205,6 +247,96 @@ describe("parseRules: 節の分け方", () => {
       { path: "glossary/README.md", markdown: "# Glossary\n\n#### Sec\n\n1. A\n" },
     ]);
     expect(pages.map((p) => p.pageId)).toEqual(["glossary"]);
+  });
+
+  describe("####・###・行頭の太字で節を区切る", () => {
+    const mixed: RawPage = {
+      path: "game-mechanics/x.md",
+      markdown:
+        "# M - X\n\n#### General Rules\n\n1. A\n\n### Standard Games\n\n1. B\n\n**Leveling Up**\n\n1. C\n\n**1.1 Announcing Activation**: First, announce.\n\n1. D\n\n**1.4 Selecting Modes:** Pick.\n\n### Masteries:\n\n#### Next\n\n1. E",
+    };
+
+    test("7 節に分かれ、見出しは区切りの文字列から末尾の : を落としたもの", () => {
+      const p = page(parse([mixed]), "x");
+      expect(p.sections.map((s) => s.heading)).toEqual([
+        "General Rules",
+        "Standard Games",
+        "Leveling Up",
+        "1.1 Announcing Activation",
+        "1.4 Selecting Modes",
+        "Masteries",
+        "Next",
+      ]);
+    });
+
+    test("どの節でも番号は 1 から振り直され、各条文がその節に入る", () => {
+      const pages = parse([mixed]);
+      expect(clause(pages, "x#General Rules:1").text).toContain("A");
+      expect(clause(pages, "x#Standard Games:1").text).toContain("B");
+      expect(clause(pages, "x#Standard Games:1").sectionId).toBe("x#Standard Games");
+      expect(clause(pages, "x#Leveling Up:1").text).toContain("C");
+      expect(clause(pages, "x#1.1 Announcing Activation:1").text).toContain("D");
+      expect(clause(pages, "x#Next:1").text).toContain("E");
+    });
+
+    test("太字の後ろに続く文は、頭の : と空白を落としてその節の番号 0 の条文になる", () => {
+      const pages = parse([mixed]);
+      const a0 = clause(pages, "x#1.1 Announcing Activation:0");
+      expect(a0.number).toBe("0");
+      expect(a0.text).toBe("First, announce.");
+      expect(clause(pages, "x#1.4 Selecting Modes:0").text).toBe("Pick.");
+      expect(clause(pages, "x#1.1 Announcing Activation:1").text).not.toContain("First");
+    });
+
+    test("直後に #### が来る ### の節は、条文 0 件で残る", () => {
+      const p = page(parse([mixed]), "x");
+      const masteries = p.sections.find((s) => s.heading === "Masteries");
+      expect(masteries?.sectionId).toBe("x#Masteries");
+      expect(masteries?.clauses).toEqual([]);
+    });
+  });
+
+  test("番号の無い段落と箇条書きは、直前の条文の text に続く", () => {
+    const pages = parse([
+      {
+        path: "p.md",
+        markdown: "# P - Q\n\n#### General Rules\n\n1. A\n\nSituations:\n\n* x\n* y",
+      },
+    ]);
+    const c1 = clause(pages, "p#General Rules:1");
+    expect(c1.text).toContain("A");
+    expect(c1.text).toContain("Situations:");
+    expect(c1.text).toContain("* x");
+    expect(c1.text).toContain("* y");
+    expect(clauses(pages)).toHaveLength(1);
+  });
+
+  test("節の頭にある番号の無い段落は、番号 0 の条文になる", () => {
+    const pages = parse([
+      { path: "p.md", markdown: "# P - Q\n\n#### General Rules\n\nLead.\n\n1. A" },
+    ]);
+    const c0 = clause(pages, "p#General Rules:0");
+    expect(c0.number).toBe("0");
+    expect(c0.text).toContain("Lead.");
+    expect(clause(pages, "p#General Rules:1").text).not.toContain("Lead.");
+  });
+
+  test("# で始まる行の無いページは、ファイルパスを添えて DataError", () => {
+    const e = thrown(() =>
+      parse([{ path: "dir/untitled.md", markdown: "#### General Rules\n\n1. A" }]),
+    );
+    expect(e.message).toContain("dir/untitled.md");
+  });
+
+  test("ページ ID が重なると、両方のパスを添えて DataError", () => {
+    const e = thrown(() =>
+      parse([
+        { path: "a/README.md", markdown: "# A\n\n#### Sec\n\n1. A\n" },
+        { path: "b/a.md", markdown: "# A2\n\n#### Sec\n\n1. B\n" },
+      ]),
+    );
+    expect(e.message).toContain("a/README.md");
+    expect(e.message).toContain("b/a.md");
   });
 });
 
@@ -293,6 +425,38 @@ describe("parseRules: リンク", () => {
     expect(e.message).toContain("../a/b.md#missing");
   });
 
+  test("GitBook の壊れた参照 /broken/pages/... は、一覧に無ければファイルパスとリンク先を添えて DataError", () => {
+    const e = thrown(() =>
+      parse([
+        ...targets,
+        { path: "c/p.md", markdown: "# P\n\n#### Sec\n\n1. See [c](/broken/pages/abc).\n" },
+      ]),
+    );
+    expect(e.message).toContain("c/p.md");
+    expect(e.message).toContain("/broken/pages/abc");
+  });
+
+  test("/broken/pages/... のリンクも rule-link の修正で直せる", () => {
+    const pages = parse(
+      [
+        ...targets,
+        { path: "c/p.md", markdown: "# P\n\n#### Sec\n\n1. See [c](/broken/pages/abc).\n" },
+      ],
+      [
+        {
+          kind: "rule-link",
+          path: "c/p.md",
+          from: "/broken/pages/abc",
+          to: { pageId: "b", sectionId: "b#Inner Lineage" },
+          reason: "テスト",
+        },
+      ],
+    );
+    const c1 = clause(pages, "p#Sec:1");
+    expect(c1.text).toContain("[c](b#Inner Lineage)");
+    expect(c1.links).toEqual([{ pageId: "b", sectionId: "b#Inner Lineage" }]);
+  });
+
   describe("rule-link の修正", () => {
     const negatedPage: RawPage = {
       ...glossary,
@@ -372,6 +536,39 @@ describe("parseRules: リンク", () => {
               path: "glossary/other.md",
               from: "game-terms.md#negated",
               to: null,
+              reason: "テスト",
+            },
+          ],
+        ),
+      );
+      expect(e.message).toContain("game-terms.md#negated");
+    });
+
+    test("同じ path と from の項目が 2 つあると、その from を添えて DataError", () => {
+      const fix: Correction = {
+        kind: "rule-link",
+        path: "glossary/game-terms.md",
+        from: "game-terms.md#negated",
+        to: { pageId: "game-terms", sectionId: "game-terms#Negated" },
+        reason: "テスト",
+      };
+      const e = thrown(() => parse([negatedPage], [fix, { ...fix, reason: "もう一つ" }]));
+      expect(e.message).toContain("game-terms.md#negated");
+    });
+
+    test.each([
+      ["ページ", { pageId: "no-such-page", sectionId: null }],
+      ["節", { pageId: "game-terms", sectionId: "game-terms#No Such Section" }],
+    ])("直し先の%sが無い項目は、その from を添えて DataError", (_, to) => {
+      const e = thrown(() =>
+        parse(
+          [negatedPage],
+          [
+            {
+              kind: "rule-link",
+              path: "glossary/game-terms.md",
+              from: "game-terms.md#negated",
+              to,
               reason: "テスト",
             },
           ],
