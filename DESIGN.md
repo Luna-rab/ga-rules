@@ -96,13 +96,25 @@ src/
 
 ### データの取得と焼き込み
 
-ルール文書もカードも頻繁に更新されるので、リポジトリに置かない。イメージを作るたびに最新を取得して焼き込む。`index.sqlite` は git の管理外にする。
+ルール文書もカードも頻繁に更新されるので、リポジトリに置かない。イメージを作るたびに最新を取得して焼き込む。
+
+取得（`bun run fetch:data`）と索引の作成（`bun run build:index`）を分ける。取得した原本は `data/` に置き、手元でも Docker の 1 段目（`/app/data`）でも同じ構成にする。手元では 1 度取得すれば、ネットワークなしで索引を何度でも作り直せる。`data/` と `index.sqlite` は git の管理外にする。
+
+```
+data/
+  rules/        gitbook-rules の .md だけ（リポジトリと同じ木構造。.gitbook/ の画像は展開しない）
+                直下の README.md（変更履歴）と table-of-contents.md（SUMMARY.md と同じ目次）は捨てる
+  cards/        <slug>.json に 1 枚ずつ。「カードの取り込み」の列だけを整形して書く（2,495 ファイル・計 1.8MB）
+  source.json   取り込んだルールのコミット SHA・カード枚数・取得日時
+```
 
 ```mermaid
 flowchart LR
     subgraph S1["1 段目"]
-        C[gitbook-rules を clone] --> I[bun run build:index]
-        API[api.gatcg.com] --> I
+        GH[gitbook-rules の tarball] --> F[bun run fetch:data]
+        API[api.gatcg.com] --> F
+        F --> D[/data/]
+        D --> I[bun run build:index]
         I --> DB[(index.sqlite)]
     end
     subgraph S2["2 段目（実行用）"]
@@ -114,6 +126,7 @@ flowchart LR
 
 - 取得は Dockerfile の中で行う。`docker build` 1 回で「最新を取得してイメージを作る」が済み、手元・CI・Cloud Build のどこでも同じものができる。
 - 取得の直前に `ARG DATA_VERSION` を置き、ビルドごとに値を変える。レイヤーキャッシュが効くと、古いデータのまま新しいイメージができる。
+- ルール文書は `git clone` ではなく GitHub の tarball で取る。`oven/bun` のイメージに `git` が無く、`tar` はある。ブランチの先頭の SHA を先に API で決めてから、その SHA の tarball を取る。ブランチ名で取ると、その間に push が入ったとき `source.json` の SHA と中身がずれる。
 - 採らなかった方法: CI で `index.sqlite` を作って Dockerfile で `COPY` する。手元の `docker build` だけでは DB が無いか古くなる。
 
 ### MCP の実装
@@ -151,9 +164,22 @@ flowchart LR
 
 ### カードの取り込み
 
-- `GET https://api.gatcg.com/cards/search?page_size=50&page=N` を `has_more` が false になるまで呼ぶ（約 50 回）。`page_size` の上限は 50。
+- `GET https://api.gatcg.com/cards/search?page_size=50&page=N` を `total_pages`（約 50）まで呼ぶ。`page_size` の上限は 50。
+- 1 ページに約 2.5 秒かかる。順に呼ぶと 1 分 40 秒、5 本ずつ並べると 40 秒。10 本並べても 1 本あたりが遅くなるだけなので、取得先の負担を考えて 5 本にする。
+- 連結した件数が応答の `total_cards` と一致しなければ失敗させる。ページの取りこぼしは HTTP のエラーにならない。
 - 既定の User-Agent では 403 が返る（Python の `urllib` で確認）。User-Agent を明示する。
-- 保存する列: `slug`, `name`, `types`, `subtypes`, `classes`, `elements`, `cost_reserve`, `cost_memory`, `level`, `power`, `life`, `durability`, `speed`, `effect_raw`, `effect`。
+- 保存する列: `slug`, `name`, `types`, `subtypes`, `classes`, `elements`, `cost`, `level`, `power`, `life`, `durability`, `speed`, `effect_raw`, `rule`, `references`, `legality`。API の応答は 1 枚約 12KB あるが、残すのは 1 枚 1KB 未満。
+  - 元素は `elements` だけを残す。`element` は 1 つしか持たず、84 枚で `elements` と食い違う。
+    - Exalted のカード 80 枚: `element` は `EXALTED` だけで、`elements` は `["EXALTED", "FIRE"]` など。Exalted のカードは他の元素も併せ持ち、プレイには両方が要る（`game-mechanics-special-elements.md` の Exalted 2・3）。`element` を渡すと Fire などの条件が抜けて誤答する。
+    - マスタリー 4 枚: `element` は `NORM` で、`elements` は `[]`。マスタリーはプレイしない（`game-mechanics-mastery.md` の 3）ので、元素なしで正しい。
+  - コストは `cost`（`{type, value}`）を使う。`cost_reserve` / `cost_memory` は X コストを `-1` で表し（`sidereal-spellshot` など）、そのまま渡すと「コスト −1」と誤答する。
+  - `legality` はフォーマット（STANDARD / PANTHEON / DRAFT）ごとの禁止で、149 枚にある。学習データの古い禁止リストで答えさせないために残す。
+- 捨てる列
+  - `editions` / `result_editions`: 印刷ごとの情報（セット・レアリティ・画像・foil）で、応答の 9 割以上を占める。印刷面の効果テキストは 209 枚で上の `effect_raw` と違う（古い印刷や注釈文の省略。71 枚は ERRATA の裁定あり）。答えの根拠は `effect_raw` と裁定にする。
+  - `effect` / `effect_html`: `effect_raw` と同じ内容の Markdown 版（カード名が `CARDNAME`）と HTML 版。太字は用語の抽出に使わない。
+  - `element`: 上記のとおり `elements` で足り、Exalted のカードで条件が落ちる。
+  - `referenced_by`: `references` の逆向き。索引では結合で引ける。`references` にあって `referenced_by` に無い組が 5 件あるので、`references` を正とする。
+  - `flavor`, `uuid`, `created_at`, `last_update`。
 - `rule`（公式裁定）と `references`（`kind` が SUMMON / STATUS / MASTERY / GENERATE / REFERENCE / BREW）は別テーブルに展開する。
 
 ### 用語の抽出（リンクを張る処理）
