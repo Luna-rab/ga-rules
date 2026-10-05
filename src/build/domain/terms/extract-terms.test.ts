@@ -4,11 +4,7 @@ import { extractTerms, Matcher } from ".";
 
 // 条文は用語の抽出に使わないので、節は見出しと種類だけを持たせる。
 // 文字列だけ渡した節は #### の見出し（kind "heading"）
-function page(
-  pageId: string,
-  title: string,
-  headings: (string | [string, SectionKind])[],
-): Page {
+function page(pageId: string, title: string, headings: (string | [string, SectionKind])[]): Page {
   return {
     pageId,
     title,
