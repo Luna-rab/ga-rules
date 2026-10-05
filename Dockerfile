@@ -1,13 +1,16 @@
 # タグは package.json の packageManager と揃える。
+# 実行用の依存だけ。2 段目に開発用の依存（drizzle-kit など）を入れない。
 FROM oven/bun:1.4.2 AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile --production
 
 # 1 段目: ルール文書とカードを取得して index.sqlite を作る。
+# build:index は drizzle-kit で DDL を作るので、開発用の依存も入れる。
 FROM oven/bun:1.4.2 AS index
 WORKDIR /app
-COPY --from=deps /app/node_modules node_modules
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
 COPY package.json ./
 COPY src/shared src/shared
 COPY src/build src/build
