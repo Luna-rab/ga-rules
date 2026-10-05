@@ -174,8 +174,8 @@ function splitPage(raw: RawPage): DraftPage {
     }
     const text = line.trim();
     if (text === "") continue;
+    // 番号の無い段落・箇条書きは直前の条文の続きなので、書き直したリストは途切れない。shift は残す
     afterHint = false;
-    shift = 0;
     ensureClause().lines.push(text);
   }
 
