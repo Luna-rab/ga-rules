@@ -45,7 +45,8 @@ export function extractTerms(pages: Page[]): Term[] {
   return [...byName.values()];
 }
 
-// "Died/Dies and Kills/Killed" → ["Died", "Dies", "Kills", "Killed"]。先頭が名前、残りが別名
+// "Died/Dies and Kills/Killed" → ["Died", "Dies", "Kills", "Killed"]。先頭が名前、残りが別名。
+// "A, B, and C" のカンマも区切りにし、名前の末尾にカンマを残さない
 function splitHeading(heading: string): string[] {
   const cleaned = heading
     .replace(/<a\b[^>]*>\s*<\/a>/g, "")
@@ -55,7 +56,7 @@ function splitHeading(heading: string): string[] {
     .replace(/\s+N$/, "")
     .trim();
   return cleaned
-    .split(/\s*\/\s*|\s+and\s+/)
+    .split(/\s*\/\s*|\s*,\s*(?:and\s+)?|\s+and\s+/)
     .map((s) => s.trim())
     .filter((s) => s !== "");
 }

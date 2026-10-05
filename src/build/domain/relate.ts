@@ -48,7 +48,9 @@ export function relate(input: {
   const clauseCards = new Rows<{ clauseId: string; cardSlug: string }>();
   for (const page of input.pages) {
     for (const section of page.sections) {
-      for (const { clauseId, text } of section.clauses) {
+      for (const { clauseId, text: raw } of section.clauses) {
+        // リンク先（ページID#見出し）の語に当てないよう、表示文字列だけを残す
+        const text = raw.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
         for (const termId of termMatcher.match(text)) clauseTerms.add({ clauseId, termId });
         for (const cardSlug of cardMatcher.match(text)) clauseCards.add({ clauseId, cardSlug });
       }
