@@ -22,7 +22,13 @@ export async function readCards(dataDir: string): Promise<Card[]> {
   const files = (await readdir(cardsDir)).filter((f) => f.endsWith(".json")).toSorted();
   return Promise.all(
     files.map(async (file) => {
-      const result = CardSchema.safeParse(await Bun.file(join(cardsDir, file)).json());
+      let json: unknown;
+      try {
+        json = await Bun.file(join(cardsDir, file)).json();
+      } catch (e) {
+        throw new DataError(`cards/${file}`, e instanceof Error ? e.message : String(e));
+      }
+      const result = CardSchema.safeParse(json);
       if (!result.success) throw new DataError(`cards/${file}`, result.error.message);
       return result.data;
     }),
