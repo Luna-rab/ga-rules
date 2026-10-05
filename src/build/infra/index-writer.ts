@@ -21,7 +21,8 @@ const CHUNK = 500;
 
 // outPath の横の一時ファイルに PRAGMA foreign_keys=ON で書き、FTS を rebuild してから outPath へ rename する
 export async function writeIndex(outPath: string, data: IndexData): Promise<void> {
-  const tmpPath = `${outPath}.tmp-${process.pid}`;
+  // 名前を固定にして、前の実行が途中で止まって残した一時ファイルも次の実行で消す。
+  const tmpPath = `${outPath}.tmp`;
   rmSync(tmpPath, { force: true });
   const sqlite = new Database(tmpPath, { create: true, strict: true });
   try {
