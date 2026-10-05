@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "bun run --hot src/server/index.ts",
     "start": "bun run src/server/index.ts",
-    "fetch:data": "bun run src/build/fetch.ts",
-    "build:index": "bun run src/build/index.ts",
+    "fetch:data": "bun run src/build/infra/fetch/fetch.ts",
+    "build:index": "bun run src/build/build-index.ts",
     "build:image": "docker build --build-arg DATA_VERSION=$(date -u +%Y%m%dT%H%M%SZ) -t ga-rules .",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",

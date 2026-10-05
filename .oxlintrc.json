@@ -13,6 +13,33 @@
   "env": {
     "builtin": true
   },
+  "overrides": [
+    {
+      "files": ["src/build/domain/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "bun:sqlite",
+                  "node:*",
+                  "drizzle-orm",
+                  "drizzle-orm/*",
+                  "drizzle-kit",
+                  "drizzle-kit/*",
+                  "**/infra",
+                  "**/infra/**"
+                ],
+                "message": "domain/ は入出力をしない。bun:sqlite・node:*・drizzle・infra/ は infra/ か build-index.ts で使う"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
   "options": {
     "typeAware": true,
     "denyWarnings": true

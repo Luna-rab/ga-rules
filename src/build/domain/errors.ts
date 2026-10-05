@@ -3,7 +3,7 @@ export class DataError extends Error {
     readonly where: string,
     detail: string,
   ) {
-    super();
-    throw new Error(`not implemented: DataError(${where}, ${detail})`);
+    super(`${where}: ${detail}`);
+    this.name = "DataError";
   }
 }
