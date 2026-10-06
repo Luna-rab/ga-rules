@@ -5,7 +5,7 @@ const MIN_SIMILARITY = 0.75;
 
 // 小文字にし、英数字以外を区切りにして語に分ける。
 export function nameWords(s: string): string[] {
-  return s.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  return s.toLowerCase().replaceAll(/['’]/g, "").match(/[\p{L}\p{N}]+/gu) ?? [];
 }
 
 function editDistance(a: string, b: string): number {
