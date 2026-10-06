@@ -22,3 +22,15 @@ export function findTerm<T extends TermLike>(terms: T[], input: string): T | und
     (t) => t.name.toLowerCase() === key || t.aliases.some((a) => a.toLowerCase() === key),
   );
 }
+
+// どの用語の定義でもない節（用語集のページの冒頭の一般則など）。一覧だけでは届かないので本文を返す
+export function generalSections<S extends { sectionId: string }>(
+  terms: TermLike[],
+  pageId: string,
+  sections: S[],
+): S[] {
+  const defined = new Set(
+    terms.flatMap((t) => t.definitions.filter((d) => d.pageId === pageId).map((d) => d.sectionId)),
+  );
+  return sections.filter((s) => !defined.has(s.sectionId));
+}

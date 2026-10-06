@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { pageIdOfCiteId } from "../../shared/cite";
-import { GLOSSARY_PAGE_IDS, glossaryTermNames } from "../lookup/glossary";
+import { generalSections, GLOSSARY_PAGE_IDS, glossaryTermNames } from "../lookup/glossary";
 import { readPage } from "../read/pages";
 import { renderSections } from "../render/clauses";
 import { renderGlossary } from "../render/glossary";
@@ -23,7 +23,12 @@ export const getRulesPage: ToolDefinition<{ page_id: z.ZodString }> = {
     }
     if (GLOSSARY_PAGE_IDS.includes(pageId)) {
       const names = glossaryTermNames(ctx.catalog.terms, pageId);
-      return { text: renderGlossary(entry.title, pageId, names), count: 1 };
+      const general = generalSections(
+        ctx.catalog.terms,
+        pageId,
+        readPage(ctx.db, pageId)?.sections ?? [],
+      );
+      return { text: renderGlossary(entry.title, pageId, names, general), count: 1 };
     }
     const page = readPage(ctx.db, pageId);
     if (!page)

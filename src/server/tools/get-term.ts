@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { findTerm, GLOSSARY_PAGE_IDS, glossaryTermNames } from "../lookup/glossary";
+import {
+  findTerm,
+  generalSections,
+  GLOSSARY_PAGE_IDS,
+  glossaryTermNames,
+} from "../lookup/glossary";
 import { readPage } from "../read/pages";
 import { renderSections } from "../render/clauses";
 import { renderGlossary } from "../render/glossary";
@@ -20,7 +25,12 @@ export const getTerm: ToolDefinition<{ term: z.ZodString }> = {
       if (!page) continue;
       if (def.sectionId === null && GLOSSARY_PAGE_IDS.includes(def.pageId)) {
         blocks.push(
-          renderGlossary(page.title, page.pageId, glossaryTermNames(ctx.catalog.terms, def.pageId)),
+          renderGlossary(
+            page.title,
+            page.pageId,
+            glossaryTermNames(ctx.catalog.terms, def.pageId),
+            generalSections(ctx.catalog.terms, def.pageId, page.sections),
+          ),
         );
         continue;
       }
