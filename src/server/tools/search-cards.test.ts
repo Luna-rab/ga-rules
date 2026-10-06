@@ -136,8 +136,16 @@ describe("search_cards: 検索", () => {
     const rows = linesOf(out.text).filter((l) => all.some((c) => hasSlug(l, c.slug)));
     expect(rows.length).toBe(20);
     for (const l of rows) expect(l).toMatch(/draw/i);
-    const names = rows.map((l) => all.find((c) => hasSlug(l, c.slug))?.name ?? "");
-    expect(names).not.toEqual(names.toSorted());
+    // 関連度順（bm25 の昇順、同点は name・slug）。期待する並びは索引から直に引く
+    const expected = ctx.db
+      .query(
+        `SELECT card.slug FROM card_fts JOIN card ON card.rowid = card_fts.rowid
+         WHERE card_fts MATCH '"draw"' ORDER BY bm25(card_fts), card.name, card.slug LIMIT 20`,
+      )
+      .all()
+      .map((r) => z.object({ slug: z.string() }).parse(r).slug);
+    const order = rows.map((l) => all.find((c) => hasSlug(l, c.slug))?.slug ?? "");
+    expect(order).toEqual(expected);
   });
 
   test("cost_type: memory と cost の範囲は、コストが memory 2 のカードだけを返す", () => {
