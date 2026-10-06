@@ -13,7 +13,7 @@ export const searchRules: ToolDefinition<{ query: z.ZodString }> = {
     const match = toMatchQuery(query);
     if (match === null) {
       return {
-        text: 'The query has no searchable words. Pass words made of letters or digits, e.g. "activate ability during opponent turn".',
+        text: 'The query has no searchable words. The rules are in English, so search with English words (letters or digits), e.g. "activate ability during opponent turn".',
         isError: true,
         count: 0,
       };
