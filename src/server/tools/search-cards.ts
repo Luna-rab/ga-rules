@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { parseCardQuery } from "../lookup/card-query";
+import { SEARCH_LIMIT, searchCardRows } from "../read/cards";
+import { renderCardLine } from "../render/cards";
 import type { ToolDefinition } from "./types";
 
 const inputSchema = {
@@ -28,5 +31,17 @@ export const searchCards: ToolDefinition<typeof inputSchema> = {
   description:
     "Searches Grand Archive cards by conditions; every condition given must hold. Returns up to 20 cards, one per line, with the total match count. text matches name or effect text (all words); type, subtype, class, element take one value each (case-insensitive); cost_type is reserve/memory/none; speed is fast/slow; legal_in and banned_in are STANDARD/PANTHEON/DRAFT; the _min/_max pairs are numeric ranges. At least one condition is required.",
   inputSchema,
-  handler: () => ({ text: "Not implemented yet.", isError: true, count: 0 }),
+  handler: (ctx, args) => {
+    const parsed = parseCardQuery(args, ctx.catalog.attributes);
+    if (!parsed.ok) return { text: parsed.message, isError: true, count: 0 };
+
+    const { total, hits } = searchCardRows(ctx.db, parsed.query);
+    if (hits.length === 0) return { text: "No cards found.", count: 0 };
+    const header =
+      total > SEARCH_LIMIT
+        ? `Showing ${hits.length} of ${total} cards. Add more conditions to narrow the results.`
+        : `${total} cards.`;
+    const lines = hits.map((h) => renderCardLine(h.card, h.snippet?.replace(/\s+/g, " ")));
+    return { text: [header, ...lines].join("\n"), count: hits.length };
+  },
 };
