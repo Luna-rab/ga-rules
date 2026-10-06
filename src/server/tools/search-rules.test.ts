@@ -45,8 +45,7 @@ describe("search_rules: 裁定", () => {
     const names = ctx.db
       .query(
         `SELECT DISTINCT c.name FROM card_ruling r
-         JOIN ruling_card rc ON rc.ruling_id = r.ruling_id
-         JOIN card c ON c.slug = rc.card_slug
+         JOIN card c ON c.slug = r.card_slug
          WHERE r.description LIKE ?`,
       )
       .all(`${OMEN}%`)
