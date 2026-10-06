@@ -40,7 +40,7 @@ export const searchCards: ToolDefinition<typeof inputSchema> = {
     const header =
       total > SEARCH_LIMIT
         ? `Showing ${hits.length} of ${total} cards. Add more conditions to narrow the results.`
-        : `${total} cards.`;
+        : `${total} ${total === 1 ? "card" : "cards"}.`;
     const lines = hits.map((h) => renderCardLine(h.card, h.snippet?.replace(/\s+/g, " ")));
     return { text: [header, ...lines].join("\n"), count: hits.length };
   },

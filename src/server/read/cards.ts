@@ -43,7 +43,7 @@ function toSummary(r: CardRow): CardSummary {
     subtypes: StringArray.parse(JSON.parse(r.subtypes)),
     classes: StringArray.parse(JSON.parse(r.classes)),
     elements: StringArray.parse(JSON.parse(r.elements)),
-    cost: { type: cost.type ?? null, value: cost.value === undefined ? null : String(cost.value) },
+    cost: { type: cost.type ?? null, value: cost.value == null ? null : String(cost.value) },
     level: r.level,
     power: r.power,
     life: r.life,
@@ -132,7 +132,7 @@ export function searchCardRows(db: Database, q: CardQuery): { total: number; hit
     .object({ n: z.number() })
     .parse(db.query(`SELECT COUNT(*) AS n FROM ${from} ${whereSql}`).get(...bound)).n;
 
-  const snippet = q.match === null ? "NULL" : "snippet(card_fts, -1, '[', ']', '…', 12)";
+  const snippet = q.match === null ? "NULL" : "snippet(card_fts, -1, '**', '**', '…', 12)";
   const order = q.match === null ? "card.name, card.slug" : "bm25(card_fts), card.name, card.slug";
   const rows = db
     .query(

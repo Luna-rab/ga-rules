@@ -63,7 +63,7 @@ function pick(values: string[], given: string): string | null {
 
 // 語を英数字に分け、全語を含む FTS5 の式にする。記号を式に渡さない。
 export function toMatchExpression(text: string): string | null {
-  const words = text.match(/[A-Za-z0-9]+/g);
+  const words = text.match(/[\p{L}\p{N}]+/gu);
   return words ? words.map((w) => `"${w}"`).join(" ") : null;
 }
 
