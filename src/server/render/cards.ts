@@ -56,7 +56,8 @@ export function renderCardLine(c: CardSummary, detail?: string): string {
     c.elements.join("/"),
     ...stats(c),
   ].filter((p) => p !== "");
-  const tail = detail ?? (c.effectRaw ? oneLine(c.effectRaw).slice(0, 100) : "");
+  const effect = c.effectRaw ? oneLine(c.effectRaw) : "";
+  const tail = detail ?? (effect.length > 100 ? `${effect.slice(0, 100)}…` : effect);
   return `- ${c.name} (${c.slug}) | ${parts.join(" | ")}${tail ? ` — ${tail}` : ""}`;
 }
 
