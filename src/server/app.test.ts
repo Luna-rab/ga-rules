@@ -62,6 +62,27 @@ const SEARCH_CARDS_NUMBERS = [
   "durability_max",
 ];
 
+// console.log に出た JSON 1 行ごとのオブジェクトを集めながら fn を流す。
+async function captureLogs(fn: () => Promise<void>): Promise<Record<string, unknown>[]> {
+  const spy = spyOn(console, "log").mockImplementation(() => {});
+  try {
+    await fn();
+    return spy.mock.calls
+      .map((c) => c[0])
+      .filter((a): a is string => typeof a === "string")
+      .flatMap((s) => {
+        try {
+          const parsed = z.record(z.string(), z.unknown()).safeParse(JSON.parse(s));
+          return parsed.success ? [parsed.data] : [];
+        } catch {
+          return [];
+        }
+      });
+  } finally {
+    spy.mockRestore();
+  }
+}
+
 describe("/mcp（実データの索引）", () => {
   let app: ReturnType<typeof createApp>;
   let tools: ToolInfo[];
@@ -174,27 +195,6 @@ describe("/mcp（実データの索引）", () => {
     expect(typeof entry?.ms).toBe("number");
     expect(entry?.ms).toBeGreaterThanOrEqual(0);
   });
-
-  // console.log に出た JSON 1 行ごとのオブジェクトを集めながら fn を流す。
-  async function captureLogs(fn: () => Promise<void>): Promise<Record<string, unknown>[]> {
-    const spy = spyOn(console, "log").mockImplementation(() => {});
-    try {
-      await fn();
-      return spy.mock.calls
-        .map((c) => c[0])
-        .filter((a): a is string => typeof a === "string")
-        .flatMap((s) => {
-          try {
-            const parsed = z.record(z.string(), z.unknown()).safeParse(JSON.parse(s));
-            return parsed.success ? [parsed.data] : [];
-          } catch {
-            return [];
-          }
-        });
-    } finally {
-      spy.mockRestore();
-    }
-  }
 
   test("get_card に型の誤った slugs を渡すと、呼び出しログが 1 行出て error:true が付く", async () => {
     const logs = await captureLogs(async () => {
