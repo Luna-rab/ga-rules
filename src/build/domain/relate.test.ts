@@ -56,7 +56,18 @@ function term(termId: number, name: string, aliases: string[] = []): Term {
 }
 
 function ruling(rulingId: number, cardSlug: string, description: string): Ruling {
-  return { rulingId, cardSlug, dateAdded: "2024-01-01", title: "Q", description };
+  return {
+    rulingId,
+    citeId: `${cardSlug}#ruling:2024-01-01:${rulingId}`,
+    cardSlug,
+    dateAdded: "2024-01-01",
+    title: "Q",
+    description,
+  };
+}
+
+function rawRuling(date_added: string): RawRuling {
+  return { title: "T", date_added, description: "D." };
 }
 
 function ref(slug: string, kind = "MASTERY"): CardReference {
@@ -96,16 +107,11 @@ describe("toRulings", () => {
   });
 
   test("citeId は取得元の順に、同じカード・同じ日付の中で 1 から数える", () => {
-    const r = (date_added: string): RawRuling => ({
-      title: "T",
-      date_added,
-      description: "D.",
-    });
     const rulings = toRulings([
       card("beguiling-coup", "Beguiling Coup", {
-        rule: [r("2025-07-18"), r("2025-07-18"), r("2025-06-27")],
+        rule: [rawRuling("2025-07-18"), rawRuling("2025-07-18"), rawRuling("2025-06-27")],
       }),
-      card("other-card", "Other Card", { rule: [r("2025-07-18")] }),
+      card("other-card", "Other Card", { rule: [rawRuling("2025-07-18")] }),
     ]);
 
     expect(rulings.filter((x) => x.cardSlug === "beguiling-coup").map((x) => x.citeId)).toEqual([

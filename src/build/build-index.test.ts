@@ -187,13 +187,13 @@ describe("buildIndex", () => {
   });
 });
 
-describe("buildIndex: 書いた index.sqlite の形", () => {
-  async function build(): Promise<Database> {
-    putValidData();
-    await buildIndex({ dataDir, outPath });
-    return new Database(outPath, { readonly: true });
-  }
+async function build(): Promise<Database> {
+  putValidData();
+  await buildIndex({ dataDir, outPath });
+  return new Database(outPath, { readonly: true });
+}
 
+describe("buildIndex: 書いた index.sqlite の形", () => {
   test("rule_page に body 列が無く、parent_page_id と position がある", async () => {
     const db = await build();
     const columns = db
