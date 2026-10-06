@@ -124,8 +124,8 @@ describe("search_cards: 検索", () => {
     expect(names).toEqual(names.toSorted());
     // 20 件目の名前より前の名前は、すべて出る
     const last = names[19] ?? "";
-    for (const m of mage.filter((m) => m.name < last)) {
-      expect(rows.some((l) => hasSlug(l, m.slug))).toBe(true);
+    for (const before of mage.filter((x) => x.name < last)) {
+      expect(rows.some((l) => hasSlug(l, before.slug))).toBe(true);
     }
   });
 
