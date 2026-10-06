@@ -12,6 +12,8 @@ const linesOf = (text: string) => text.split("\n").filter((l) => l.trim() !== ""
 const hasSlug = (line: string, slug: string) =>
   new RegExp(`(^|[^a-z0-9-])${slug}($|[^a-z0-9-])`).test(line);
 
+const hasNumber = (text: string, n: number) => new RegExp(`(^|[^0-9])${n}($|[^0-9])`).test(text);
+
 describe("find_cards", () => {
   test("Aella は Aella, Zephyr's Hand を名前と slug 付きで返す", () => {
     const out = run("Aella");
@@ -44,13 +46,26 @@ describe("find_cards", () => {
     expect(same.length).toBeGreaterThan(10);
 
     const out = run("Nameless Champion");
+    // カードの行は slug を含む行。打ち切りの注記の行は数えない
     const lines = linesOf(out.text);
-    expect(lines.length).toBeLessThanOrEqual(10);
-    const found = same.filter((s) => lines.some((l) => hasSlug(l, s)));
-    expect(found.length).toBeGreaterThan(1);
+    const cardLines = lines.filter((l) => same.some((s) => hasSlug(l, s)));
+    const noteLines = lines.filter((l) => !cardLines.includes(l));
+    expect(cardLines.length).toBeGreaterThan(1);
+    expect(cardLines.length).toBeLessThanOrEqual(10);
     // 1 行 1 枚。行ごとに別の slug で見分けられる
-    for (const l of lines) expect(same.filter((s) => hasSlug(l, s)).length).toBe(1);
-    expect(out.count).toBe(lines.length);
+    for (const l of cardLines) expect(same.filter((s) => hasSlug(l, s)).length).toBe(1);
+    expect(out.count).toBe(cardLines.length);
+    // 10 枚で打ち切ったので、総件数を書いた注記が 1 行だけ付く
+    expect(noteLines.length).toBe(1);
+    expect(hasNumber(noteLines[0] ?? "", same.length)).toBe(true);
+  });
+
+  test("打ち切らない呼び出しと該当なしには、注記の行が付かない", () => {
+    for (const name of ["Aella", "Beguilling Coup", "Fire Ball", "qqqqzzzz"]) {
+      const out = run(name);
+      expect(out.text).not.toContain("Showing");
+      if (name !== "qqqqzzzz") expect(linesOf(out.text).length).toBe(out.count);
+    }
   });
 
   test("該当なしは isError 無しで、count が 0", () => {

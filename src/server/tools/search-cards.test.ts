@@ -197,6 +197,17 @@ describe("search_cards: 検索", () => {
     }
   });
 
+  test("text に括弧を含む語（Class Bonus (2)）を渡しても、エラーにならず 1 件以上返す", () => {
+    const out = run({ text: "Class Bonus (2)" });
+    expect(out.isError).toBeFalsy();
+    expect(out.count).toBeGreaterThan(0);
+  });
+
+  test("text が記号だけ（--）なら isError", () => {
+    const out = run({ text: "--" });
+    expect(out.isError).toBe(true);
+  });
+
   test("該当なしは isError 無しで、count は 0", () => {
     const out = run({ text: "qqqqzzzz" });
     expect(out.isError).toBeFalsy();
