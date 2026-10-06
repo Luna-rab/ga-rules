@@ -199,7 +199,9 @@ describe("search_cards: 検索", () => {
   });
 
   test("cost.value が null のカード（cost_type: none）は範囲の条件で外れ、該当なしになる", () => {
-    const none = cards("json_extract(cost, '$.type') = 'none' AND json_extract(cost, '$.value') IS NULL");
+    const none = cards(
+      "json_extract(cost, '$.type') = 'none' AND json_extract(cost, '$.value') IS NULL",
+    );
     expect(none.length).toBeGreaterThan(0);
     for (const args of [
       { cost_type: "none", cost_min: 0 },
@@ -221,12 +223,18 @@ describe("search_cards: 検索", () => {
       const [lo, hi] = key === "life" ? [20, 20] : [1, 1];
       const expected = cards(`${key} BETWEEN ${lo} AND ${hi}`);
       expect(expected.length).toBeGreaterThan(0);
-      const out = run({ [`${key}_min`]: lo, [`${key}_max`]: hi } as Args);
+      const out = run({ [`${key}_min`]: lo, [`${key}_max`]: hi });
       expect(out.isError).toBeFalsy();
       const got = shown(out.text, expected);
-      if (expected.length <= 20) expect(got.toSorted()).toEqual(expected.map((c) => c.slug).toSorted());
+      if (expected.length <= 20)
+        expect(got.toSorted()).toEqual(expected.map((c) => c.slug).toSorted());
       expect(got.length).toBe(Math.min(expected.length, 20));
-      expect(hasNumber(out.text, expected.length) || expected.length <= 20).toBe(true);
+      // 総件数は注記の行から取り出し、索引から引いた件数と照合する
+      const note = linesOf(out.text).find((l) =>
+        /^Showing \d+ of \d+ cards\.|^\d+ cards?\.$/.test(l),
+      );
+      const total = Number(note?.match(/of (\d+) cards/)?.[1] ?? note?.match(/^(\d+) card/)?.[1]);
+      expect(total).toBe(expected.length);
     }
   });
 

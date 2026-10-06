@@ -60,6 +60,14 @@ describe("find_cards", () => {
     expect(hasNumber(noteLines[0] ?? "", same.length)).toBe(true);
   });
 
+  test("Zephyrs Hand と Zephyr's Hand は、どちらも aella-zephyrs-hand を返す", () => {
+    for (const name of ["Zephyrs Hand", "Zephyr's Hand"]) {
+      const out = run(name);
+      expect(out.isError).toBeFalsy();
+      expect(linesOf(out.text).some((l) => hasSlug(l, "aella-zephyrs-hand"))).toBe(true);
+    }
+  });
+
   test("打ち切らない呼び出しと該当なしには、注記の行が付かない", () => {
     for (const name of ["Aella", "Beguilling Coup", "Fire Ball", "qqqqzzzz"]) {
       const out = run(name);

@@ -6,6 +6,7 @@ import { getCard } from "./get-card";
 
 const ctx: ToolContext = openTestContext();
 const run = (slugs: string[]) => getCard.handler(ctx, { slugs });
+const list = (json: string) => z.array(z.string()).parse(JSON.parse(json)).join(", ");
 
 const CardRow = z.object({ name: z.string(), effect_raw: z.string().nullable() });
 const RulingRow = z.object({ cite_id: z.string(), description: z.string() });
@@ -136,7 +137,6 @@ describe("get_card", () => {
     for (const slug of slugs) {
       const row = StoredRow.parse(ctx.db.query("SELECT * FROM card WHERE slug = ?").get(slug));
       const out = run([slug]).text;
-      const list = (json: string) => z.array(z.string()).parse(JSON.parse(json)).join(", ");
       for (const [label, json] of [
         ["Types", row.types],
         ["Subtypes", row.subtypes],
@@ -145,15 +145,23 @@ describe("get_card", () => {
       ] as const) {
         if (list(json) !== "") expect(out).toContain(`- ${label}: ${list(json)}`);
       }
-      const cost = row.cost === null ? null : z.object({ type: z.string().nullable(), value: z.string().nullable() }).parse(JSON.parse(row.cost));
-      if (cost?.type) expect(out).toContain(`cost ${cost.type}${cost.value === null ? "" : ` ${cost.value}`}`);
+      const cost =
+        row.cost === null
+          ? null
+          : z
+              .object({ type: z.string().nullable(), value: z.string().nullable() })
+              .parse(JSON.parse(row.cost));
+      if (cost?.type)
+        expect(out).toContain(`cost ${cost.type}${cost.value === null ? "" : ` ${cost.value}`}`);
       for (const key of ["level", "power", "life", "durability"] as const) {
         if (row[key] !== null) expect(out).toContain(`${key} ${row[key]}`);
         else expect(out).not.toMatch(new RegExp(`(^|[ ,])${key} \\d`, "m"));
       }
       if (row.speed !== null) expect(out).toContain(row.speed ? "fast" : "slow");
       if (row.legality !== null) {
-        const leg = z.record(z.string(), z.object({ limit: z.number().nullable() })).parse(JSON.parse(row.legality));
+        const leg = z
+          .record(z.string(), z.object({ limit: z.number().nullable() }))
+          .parse(JSON.parse(row.legality));
         for (const [f, v] of Object.entries(leg)) expect(out).toContain(`${f} limit ${v.limit}`);
       }
     }
