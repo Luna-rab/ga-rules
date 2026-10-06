@@ -16,7 +16,20 @@ const TermRow = z.object({
 });
 const ClauseRow = z.object({ clause_id: z.string(), text: z.string() });
 const RefRow = z.object({ slug: z.string(), name: z.string(), kind: z.string() });
-const CiteRow = z.object({ cite_id: z.string() });
+const CiteRow = z.object({ cite_id: z.string(), description: z.string() });
+const StoredRow = z.object({
+  types: z.string(),
+  subtypes: z.string(),
+  classes: z.string(),
+  elements: z.string(),
+  cost: z.string().nullable(),
+  level: z.number().nullable(),
+  power: z.number().nullable(),
+  life: z.number().nullable(),
+  durability: z.number().nullable(),
+  speed: z.number().nullable(),
+  legality: z.string().nullable(),
+});
 
 describe("get_card", () => {
   test("Beguiling Coup は裁定 3 件を引用 ID と文面つきで、効果テキストとともに返す", () => {
@@ -105,14 +118,45 @@ describe("get_card", () => {
     const out = run(["nullifying-lantern"]);
     const others = ctx.db
       .query(
-        `SELECT r.cite_id FROM ruling_card rc JOIN card_ruling r ON r.ruling_id = rc.ruling_id
+        `SELECT r.cite_id, r.description FROM ruling_card rc JOIN card_ruling r ON r.ruling_id = rc.ruling_id
          WHERE rc.card_slug = 'nullifying-lantern' AND r.card_slug <> 'nullifying-lantern'`,
       )
       .all()
-      .map((r) => CiteRow.parse(r).cite_id);
-    expect(others).toContain("censer-of-restful-peace#ruling:2025-03-02:1");
-    expect(others).toContain("relentless-hexchaser#ruling:2024-01-19:1");
-    for (const id of others) expect(out.text).toContain(`[${id}]`);
+      .map((r) => CiteRow.parse(r));
+    expect(others.map((o) => o.cite_id)).toContain("censer-of-restful-peace#ruling:2025-03-02:1");
+    expect(others.map((o) => o.cite_id)).toContain("relentless-hexchaser#ruling:2024-01-19:1");
+    for (const o of others) {
+      expect(out.text).toContain(`[${o.cite_id}]`);
+      expect(out.text).toContain(o.description.trim());
+    }
+  });
+
+  test("保存した列（種類・サブタイプ・クラス・属性・コスト・数値・速度・制限）を返す", () => {
+    const slugs = ["beguiling-coup", "nameless-champion-ac", "fireball", "merlin-amethysts-glow"];
+    for (const slug of slugs) {
+      const row = StoredRow.parse(ctx.db.query("SELECT * FROM card WHERE slug = ?").get(slug));
+      const out = run([slug]).text;
+      const list = (json: string) => z.array(z.string()).parse(JSON.parse(json)).join(", ");
+      for (const [label, json] of [
+        ["Types", row.types],
+        ["Subtypes", row.subtypes],
+        ["Classes", row.classes],
+        ["Elements", row.elements],
+      ] as const) {
+        if (list(json) !== "") expect(out).toContain(`- ${label}: ${list(json)}`);
+      }
+      const cost = row.cost === null ? null : z.object({ type: z.string().nullable(), value: z.string().nullable() }).parse(JSON.parse(row.cost));
+      if (cost?.type) expect(out).toContain(`cost ${cost.type}${cost.value === null ? "" : ` ${cost.value}`}`);
+      for (const key of ["level", "power", "life", "durability"] as const) {
+        if (row[key] !== null) expect(out).toContain(`${key} ${row[key]}`);
+        else expect(out).not.toMatch(new RegExp(`(^|[ ,])${key} \\d`, "m"));
+      }
+      if (row.speed !== null) expect(out).toContain(row.speed ? "fast" : "slow");
+      if (row.legality !== null) {
+        const leg = z.record(z.string(), z.object({ limit: z.number().nullable() })).parse(JSON.parse(row.legality));
+        for (const [f, v] of Object.entries(leg)) expect(out).toContain(`${f} limit ${v.limit}`);
+      }
+    }
   });
 
   test("存在しない slug は isError で、その slug と find_cards を返す。正しい slug と混ぜても同じ", () => {

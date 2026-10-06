@@ -105,8 +105,36 @@ describe("search_cards: 検索", () => {
     const total = cards("EXISTS (SELECT 1 FROM json_each(card.elements) WHERE value = 'FIRE')");
     expect(hasNumber(lower.text, total.length)).toBe(true);
 
-    const exalted = run({ element: "fire", text: "Alizarin Longbowman" });
-    expect(linesOf(exalted.text).some((l) => hasSlug(l, "alizarin-longbowman"))).toBe(true);
+    // 行に出た slug はすべて elements に FIRE を持つ。class ごとに絞り、20 件以下なら集合が一致する
+    const fire = cards("EXISTS (SELECT 1 FROM json_each(card.elements) WHERE value = 'FIRE')");
+    const exaltedFire = cards(
+      `EXISTS (SELECT 1 FROM json_each(card.elements) WHERE value = 'FIRE')
+       AND EXISTS (SELECT 1 FROM json_each(card.elements) WHERE value = 'EXALTED')`,
+    ).map((c) => c.slug);
+    expect(exaltedFire.length).toBeGreaterThan(0);
+    const types = ctx.db
+      .query("SELECT DISTINCT value FROM card, json_each(card.types)")
+      .all()
+      .map((r) => Value.parse(r).value);
+    let exaltedChecked = 0;
+    for (const type of types) {
+      const ofType = cards(`EXISTS (SELECT 1 FROM json_each(card.types) WHERE value = '${type}')`);
+      for (const cost of ["reserve", "memory", "none"]) {
+        const expected = cards(
+          `EXISTS (SELECT 1 FROM json_each(card.elements) WHERE value = 'FIRE')
+           AND EXISTS (SELECT 1 FROM json_each(card.types) WHERE value = '${type}')
+           AND json_extract(cost, '$.type') = '${cost}'`,
+        );
+        const out = run({ element: "fire", type, cost_type: cost });
+        const got = shown(out.text, ofType);
+        for (const s of got) expect(fire.map((c) => c.slug)).toContain(s);
+        if (expected.length > 0 && expected.length <= 20) {
+          expect(got.toSorted()).toEqual(expected.map((c) => c.slug).toSorted());
+          exaltedChecked += got.filter((s) => exaltedFire.includes(s)).length;
+        }
+      }
+    }
+    expect(exaltedChecked).toBeGreaterThan(0);
   });
 
   test("class: MAGE は 20 行と総件数 419 を返し、名前順に並び、条件を足すよう促す", () => {
@@ -135,7 +163,8 @@ describe("search_cards: 検索", () => {
     const all = cards("1");
     const rows = linesOf(out.text).filter((l) => all.some((c) => hasSlug(l, c.slug)));
     expect(rows.length).toBe(20);
-    for (const l of rows) expect(l).toMatch(/draw/i);
+    // 当たった語は snippet が ** で囲む（大文字小文字は元のまま）
+    for (const l of rows) expect(l).toMatch(/\*\*draw/i);
     // 関連度順（bm25 の昇順、同点は name・slug）。期待する並びは索引から直に引く
     const expected = ctx.db
       .query(
@@ -167,6 +196,38 @@ describe("search_cards: 検索", () => {
     // 総件数は数値のコストを持つカードだけ。X を含めた件数ではない
     expect(hasNumber(out.text, numeric.length)).toBe(true);
     expect(hasNumber(out.text, numeric.length + x.length)).toBe(false);
+  });
+
+  test("cost.value が null のカード（cost_type: none）は範囲の条件で外れ、該当なしになる", () => {
+    const none = cards("json_extract(cost, '$.type') = 'none' AND json_extract(cost, '$.value') IS NULL");
+    expect(none.length).toBeGreaterThan(0);
+    for (const args of [
+      { cost_type: "none", cost_min: 0 },
+      { cost_type: "none", cost_max: 99 },
+    ] satisfies Args[]) {
+      const out = run(args);
+      expect(out.isError).toBeFalsy();
+      expect(out.count).toBe(0);
+      expect(shown(out.text, none)).toEqual([]);
+    }
+    // 範囲を付けなければ、同じカードが当たる
+    const all = run({ cost_type: "none" });
+    expect(all.count).toBeGreaterThan(0);
+    expect(shown(all.text, none).length).toBe(all.count);
+  });
+
+  test("level・power・life・durability の範囲は、範囲内の値を持つカードだけを返す", () => {
+    for (const key of ["level", "power", "life", "durability"] as const) {
+      const [lo, hi] = key === "life" ? [20, 20] : [1, 1];
+      const expected = cards(`${key} BETWEEN ${lo} AND ${hi}`);
+      expect(expected.length).toBeGreaterThan(0);
+      const out = run({ [`${key}_min`]: lo, [`${key}_max`]: hi } as Args);
+      expect(out.isError).toBeFalsy();
+      const got = shown(out.text, expected);
+      if (expected.length <= 20) expect(got.toSorted()).toEqual(expected.map((c) => c.slug).toSorted());
+      expect(got.length).toBe(Math.min(expected.length, 20));
+      expect(hasNumber(out.text, expected.length) || expected.length <= 20).toBe(true);
+    }
   });
 
   test("banned_in: STANDARD は limit が 0 のカードだけ、legal_in: STANDARD はそれ以外", () => {
