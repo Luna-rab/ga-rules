@@ -64,7 +64,7 @@ function logValidationFailures(server: McpServer): void {
   }
   Reflect.set(server, "validateToolInput", async (tool: unknown, args: unknown, name: string) => {
     try {
-      return await Reflect.apply(original, server, [tool, args, name]);
+      return await Reflect.apply(original, server, [tool, args ?? {}, name]);
     } catch (e) {
       logToolCall({ tool: name, args: args ?? {}, count: 0, ms: 0, error: true });
       throw e;
