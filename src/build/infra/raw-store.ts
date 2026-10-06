@@ -17,6 +17,10 @@ export async function readRules(dataDir: string): Promise<RawPage[]> {
   );
 }
 
+export async function readSummary(dataDir: string): Promise<string> {
+  return Bun.file(join(dataDir, "rules", "SUMMARY.md")).text();
+}
+
 export async function readCards(dataDir: string): Promise<Card[]> {
   const cardsDir = join(dataDir, "cards");
   const files = (await readdir(cardsDir)).filter((f) => f.endsWith(".json")).toSorted();

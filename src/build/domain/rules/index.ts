@@ -13,7 +13,6 @@ type DraftPage = {
   path: string;
   pageId: string;
   title: string;
-  body: string;
   sections: DraftSection[];
 };
 
@@ -25,7 +24,7 @@ export function parseRules(raw: RawPage[], corrections: readonly Correction[]): 
   return pages;
 }
 
-function pageIdOf(path: string): string {
+export function pageIdOf(path: string): string {
   const parts = path.split("/");
   const file = parts.at(-1) ?? "";
   if (file === "README.md") return parts.at(-2) ?? "";
@@ -189,17 +188,7 @@ function splitPage(raw: RawPage): DraftPage {
     ensureClause().lines.push(text);
   }
 
-  const body = lines
-    .filter((l) => !HINT_CLOSE.test(l))
-    .map((l) => {
-      const hint = HINT_OPEN.exec(l);
-      return hint ? hintPrefix(hint[1] ?? "").trim() : l.replace(/[ \t]+$/, "");
-    })
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-
-  return { path: raw.path, pageId, title, body, sections };
+  return { path: raw.path, pageId, title, sections };
 }
 
 // 深さ 0 は 10、1 は a、2 は i。4 段目からは繰り返す
@@ -262,8 +251,7 @@ function buildPage(d: DraftPage, resolver: LinkResolver): Page {
     });
     return { sectionId, pageId: d.pageId, heading: s.heading, kind: s.kind, clauses };
   });
-  const body = resolver.rewrite(d.path, d.body).text;
-  return { pageId: d.pageId, title: d.title, body, sections };
+  return { pageId: d.pageId, title: d.title, sections };
 }
 
 // --- リンクの解決と書き換え ---

@@ -1,12 +1,22 @@
-import { integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import {
+  type AnySQLiteColumn,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+} from "drizzle-orm/sqlite-core";
 
 // テーブルの意味と列の選び方は DESIGN.md の「データベース」を参照。
 // rule_clause・card・card_ruling は FTS5 の外部コンテンツ（fts.ts）が rowid で引くので、WITHOUT ROWID にしない。
 
+// position は 0 から。rule_page は SUMMARY.md を上から読んだ通し番号（親が子より先）、
+// rule_section はページの中、rule_clause は節の中の順番
 export const rulePage = sqliteTable("rule_page", {
   pageId: text("page_id").primaryKey(),
   title: text("title").notNull(),
-  body: text("body").notNull(),
+  // 目次の親。最上位は NULL
+  parentPageId: text("parent_page_id").references((): AnySQLiteColumn => rulePage.pageId),
+  position: integer("position").notNull(),
 });
 
 export const ruleSection = sqliteTable("rule_section", {
@@ -15,6 +25,7 @@ export const ruleSection = sqliteTable("rule_section", {
     .notNull()
     .references(() => rulePage.pageId),
   heading: text("heading").notNull(),
+  position: integer("position").notNull(),
 });
 
 export const ruleClause = sqliteTable("rule_clause", {
@@ -24,6 +35,7 @@ export const ruleClause = sqliteTable("rule_clause", {
     .references(() => ruleSection.sectionId),
   number: text("number").notNull(),
   text: text("text").notNull(),
+  position: integer("position").notNull(),
 });
 
 export const clauseLink = sqliteTable("clause_link", {
@@ -84,6 +96,8 @@ export const card = sqliteTable("card", {
 
 export const cardRuling = sqliteTable("card_ruling", {
   rulingId: integer("ruling_id").primaryKey(),
+  // "カードslug#ruling:日付:n"。組み立ては shared/cite.ts
+  citeId: text("cite_id").notNull().unique(),
   cardSlug: text("card_slug")
     .notNull()
     .references(() => card.slug),
