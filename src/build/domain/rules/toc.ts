@@ -9,15 +9,22 @@ const SKIPPED_PATHS = new Set(["README.md", "table-of-contents.md"]);
 
 export function parseToc(summaryMarkdown: string, pages: Page[]): TocEntry[] {
   const entries: TocEntry[] = [];
-  const stack: { indent: number; pageId: string }[] = [];
+  // 取り込まない項目も stack に積み、その子が手前の兄弟を親にしないようにする（pageId は null）
+  const stack: { indent: number; pageId: string | null }[] = [];
+  const seen = new Set<string>();
   for (const line of summaryMarkdown.split(/\r?\n/)) {
     const m = ITEM.exec(line);
     if (!m) continue;
     const path = (m[2] ?? "").replace(/^<(.*)>$/, "$1");
-    if (SKIPPED_PATHS.has(path)) continue;
     const indent = (m[1] ?? "").length;
     while (stack.length > 0 && (stack.at(-1)?.indent ?? 0) >= indent) stack.pop();
+    if (SKIPPED_PATHS.has(path)) {
+      stack.push({ indent, pageId: null });
+      continue;
+    }
     const pageId = pageIdOf(path);
+    if (seen.has(pageId)) throw new DataError("SUMMARY.md", `ページ ${pageId} が目次に 2 回ある`);
+    seen.add(pageId);
     entries.push({
       pageId,
       parentPageId: stack.at(-1)?.pageId ?? null,
