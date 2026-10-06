@@ -61,11 +61,19 @@ export function loadCatalog(db: Database): Catalog {
   });
 
   const aliases = new Map<number, string[]>();
-  for (const a of d.select().from(termAlias).all()) {
+  for (const a of d
+    .select()
+    .from(termAlias)
+    .orderBy(asc(termAlias.termId), asc(termAlias.alias))
+    .all()) {
     aliases.set(a.termId, [...(aliases.get(a.termId) ?? []), a.alias]);
   }
   const definitions = new Map<number, TermEntry["definitions"]>();
-  for (const def of d.select().from(termDefinition).all()) {
+  for (const def of d
+    .select()
+    .from(termDefinition)
+    .orderBy(asc(termDefinition.termId), asc(termDefinition.pageId), asc(termDefinition.sectionId))
+    .all()) {
     definitions.set(def.termId, [
       ...(definitions.get(def.termId) ?? []),
       { pageId: def.pageId, sectionId: def.sectionId },
