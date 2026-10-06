@@ -194,22 +194,19 @@ describe("parseRules: 消すもの", () => {
       '---\ndescription: Front matter text\nlayout: wide\n---\n\n# Noisy Page\n\n#### Sec&#x20;\n\n1. Alpha <img src="https://x/y.png" alt="pic"> beta ![](../.gitbook/assets/z.png) gamma&#x20;\n',
   };
 
-  test("YAML 前置き・<img>・Markdown 画像・&#x20; は条文の text と Page.body に残らない", () => {
+  test("YAML 前置き・<img>・Markdown 画像・&#x20; は条文の text に残らない", () => {
     const pages = parse([noisy]);
     const p = page(pages, "noisy");
     expect(p.title).toBe("Noisy Page");
     const c1 = clause(pages, "noisy#Sec:1");
-    for (const text of [p.body, c1.text]) {
-      expect(text).not.toContain("Front matter text");
-      expect(text).not.toContain("layout: wide");
-      expect(text).not.toContain("<img");
-      expect(text).not.toContain("![](");
-      expect(text).not.toContain("&#x20;");
-    }
+    expect(c1.text).not.toContain("Front matter text");
+    expect(c1.text).not.toContain("layout: wide");
+    expect(c1.text).not.toContain("<img");
+    expect(c1.text).not.toContain("![](");
+    expect(c1.text).not.toContain("&#x20;");
     expect(c1.text).toContain("Alpha");
     expect(c1.text).toContain("beta");
     expect(c1.text).toContain("gamma");
-    expect(p.body).toContain("Alpha");
   });
 
   test("画像だけの見出しは節にならず、その下の条文は直前の節に入る", () => {
@@ -631,15 +628,13 @@ describe("parseRules: リンク", () => {
 });
 
 describe("parseRules: <...> で囲んだ画像とリンク、/ で始まるリンク、空になった太字", () => {
-  test("<...> で囲んだ画像は条文の text と Page.body に残らず、前後の文字は残る", () => {
+  test("<...> で囲んだ画像は条文の text に残らず、前後の文字は残る", () => {
     const pages = parse([
       { path: "p.md", markdown: "# P\n\n#### Sec\n\n1. x ![](<a (1).png>) z\n" },
     ]);
     const c1 = clause(pages, "p#Sec:1");
-    for (const text of [page(pages, "p").body, c1.text]) {
-      expect(text).not.toContain(".png");
-      expect(text).not.toContain("![](");
-    }
+    expect(c1.text).not.toContain(".png");
+    expect(c1.text).not.toContain("![](");
     expect(c1.text).toContain("x");
     expect(c1.text).toContain("z");
   });

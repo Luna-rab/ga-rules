@@ -69,7 +69,6 @@ function data(relations: Partial<Relations> = {}): IndexData {
       {
         pageId: PAGE_ID,
         title: "Game Mechanics - Damage",
-        body: "# Game Mechanics - Damage",
         sections: [
           {
             sectionId: SECTION_ID,
@@ -89,6 +88,7 @@ function data(relations: Partial<Relations> = {}): IndexData {
         ],
       },
     ],
+    toc: [{ pageId: PAGE_ID, parentPageId: null, position: 0 }],
     terms: [
       {
         termId: 1,
@@ -101,6 +101,7 @@ function data(relations: Partial<Relations> = {}): IndexData {
     rulings: [
       {
         rulingId: 1,
+        citeId: "merlin-amethysts-glow#ruling:2024-01-01:1",
         cardSlug: "merlin-amethysts-glow",
         dateAdded: "2024-01-01",
         title: "Lineage",

@@ -19,7 +19,8 @@ export type Section = {
   kind: SectionKind;
   clauses: Clause[];
 };
-export type Page = { pageId: string; title: string; body: string; sections: Section[] };
+export type Page = { pageId: string; title: string; sections: Section[] };
+export type TocEntry = { pageId: string; parentPageId: string | null; position: number };
 
 // data/cards/<slug>.json と同じ形（列名もそのまま）
 export type CardReference = { kind: string; name: string; slug: string; direction: string };
@@ -45,6 +46,7 @@ export type Card = {
 
 export type Ruling = {
   rulingId: number;
+  citeId: string;
   cardSlug: string;
   dateAdded: string;
   title: string;
