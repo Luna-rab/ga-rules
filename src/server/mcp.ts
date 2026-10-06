@@ -55,18 +55,24 @@ export function createMcpServer(ctx: ToolContext): McpServer {
 
 // 引数の型の誤りは、SDK が handler を呼ぶ前の検証で落ちる（run まで届かない）。
 // モデルが引数を誤った呼び出しこそログで見たいので、SDK の private メソッド validateToolInput を包んで 1 行書く。
-// 公開された差し込み口が無いための回避策。SDK の更新でメソッドが無くなったら、createMcpServer が例外を投げる。
-// createMcpServer は /mcp のリクエストごとに呼ばれるので、起動は通り、/mcp へのリクエストがすべて 500 になる（app.test.ts が落ちる）。
+// 公開された差し込み口が無いための回避策。SDK の更新でメソッドが無くなったら、包まずに進む。
+// 引数の誤りのログだけが出なくなる（サーバーは止めない。CI の bun run check は src/server のテストを流さない）。
+// 呼ばれ方が変わった場合は、app.test.ts の引数の型の誤りのテスト（bun run test:server）が落ちる。
 function logValidationFailures(server: McpServer): void {
   const original: unknown = Reflect.get(server, "validateToolInput");
-  if (typeof original !== "function") {
-    throw new Error("SDK に validateToolInput が無い。引数の誤りのログの差し込み先を見直す");
-  }
+  if (typeof original !== "function") return;
   Reflect.set(server, "validateToolInput", async (tool: unknown, args: unknown, name: string) => {
+    const start = performance.now();
     try {
       return await Reflect.apply(original, server, [tool, args ?? {}, name]);
     } catch (e) {
-      logToolCall({ tool: name, args: args ?? {}, count: 0, ms: 0, error: true });
+      logToolCall({
+        tool: name,
+        args: args ?? {},
+        count: 0,
+        ms: performance.now() - start,
+        error: true,
+      });
       throw e;
     }
   });
