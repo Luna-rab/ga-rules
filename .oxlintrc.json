@@ -91,6 +91,22 @@
           }
         ]
       }
+    },
+    {
+      "files": ["src/server/lookup/**", "src/server/render/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["bun:sqlite", "drizzle-orm", "drizzle-orm/*", "**/read", "**/read/**"],
+                "message": "lookup/ と render/ は DB を読まない。DB は read/ で読み、tools/ から渡す"
+              }
+            ]
+          }
+        ]
+      }
     }
   ],
   "options": {

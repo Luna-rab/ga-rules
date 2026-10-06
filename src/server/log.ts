@@ -1,5 +1,6 @@
 export type ToolCallLog = { tool: string; args: unknown; count: number; ms: number };
 
-export function logToolCall(_entry: ToolCallLog): void {
-  throw new Error("未実装");
+// Cloud Run が標準出力を Cloud Logging に取り込む。1 呼び出し 1 行の JSON。
+export function logToolCall(entry: ToolCallLog): void {
+  console.log(JSON.stringify(entry));
 }
