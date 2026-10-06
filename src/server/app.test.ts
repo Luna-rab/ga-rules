@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { z } from "zod";
 import { createApp } from "./app";
 import { logToolCall } from "./log";
+import { getGameOverview } from "./tools/get-game-overview";
 import { openTestContext } from "./testing";
 
 function rpc(method: string, params: Record<string, unknown> = {}): Request {
@@ -172,6 +173,71 @@ describe("/mcp（実データの索引）", () => {
     expect(typeof entry?.count).toBe("number");
     expect(typeof entry?.ms).toBe("number");
     expect(entry?.ms).toBeGreaterThanOrEqual(0);
+  });
+
+  // console.log に出た JSON 1 行ごとのオブジェクトを集めながら fn を流す。
+  async function captureLogs(fn: () => Promise<void>): Promise<Record<string, unknown>[]> {
+    const spy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await fn();
+      return spy.mock.calls
+        .map((c) => c[0])
+        .filter((a): a is string => typeof a === "string")
+        .flatMap((s) => {
+          try {
+            const parsed = z.record(z.string(), z.unknown()).safeParse(JSON.parse(s));
+            return parsed.success ? [parsed.data] : [];
+          } catch {
+            return [];
+          }
+        });
+    } finally {
+      spy.mockRestore();
+    }
+  }
+
+  test("get_card に型の誤った slugs を渡すと、呼び出しログが 1 行出て error:true が付く", async () => {
+    const logs = await captureLogs(async () => {
+      await app.request(rpc("tools/call", { name: "get_card", arguments: { slugs: "x" } }));
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({ tool: "get_card", args: { slugs: "x" }, error: true });
+  });
+
+  test("search_cards に型の誤った cost_min を渡すと、呼び出しログが 1 行出て error:true が付く", async () => {
+    const logs = await captureLogs(async () => {
+      await app.request(
+        rpc("tools/call", { name: "search_cards", arguments: { cost_min: "abc" } }),
+      );
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({ tool: "search_cards", error: true });
+  });
+
+  test("handler が例外を投げても、呼び出しログが 1 行出て error:true が付く", async () => {
+    const handlerSpy = spyOn(getGameOverview, "handler").mockImplementation(() => {
+      throw new Error("boom");
+    });
+    try {
+      const logs = await captureLogs(async () => {
+        await app.request(rpc("tools/call", { name: "get_game_overview", arguments: {} }));
+      });
+      expect(logs).toHaveLength(1);
+      expect(logs[0]).toMatchObject({ tool: "get_game_overview", error: true });
+    } finally {
+      handlerSpy.mockRestore();
+    }
+  });
+
+  test("arguments を付けずに get_game_overview を呼ぶと、isError なしで返り、呼び出しログが 1 行出る", async () => {
+    let result: Record<string, unknown> = {};
+    const logs = await captureLogs(async () => {
+      result = await call("tools/call", { name: "get_game_overview" });
+    });
+    expect(result.isError).toBeFalsy();
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({ tool: "get_game_overview" });
+    expect(logs[0]?.error).toBeUndefined();
   });
 });
 
