@@ -61,9 +61,11 @@ describe("get_rules_page: 通常のページ", () => {
       .map((r) => z.object({ section_id: z.string() }).parse(r).section_id);
     expect(sections.length).toBeGreaterThan(1);
     const clauses = clausesOf(pageId);
+    const secondSection = sections[1];
+    expect(secondSection).toBeDefined();
     const second = ctx.db
       .query("SELECT clause_id FROM rule_clause WHERE section_id = ? ORDER BY position LIMIT 1")
-      .get(sections[1]);
+      .get(secondSection ?? "");
     const given = z.object({ clause_id: z.string() }).parse(second).clause_id;
 
     const res = call(given);
@@ -71,7 +73,8 @@ describe("get_rules_page: 通常のページ", () => {
     const resLines = res.text.split("\n");
     let prev = -1;
     for (const c of clauses) {
-      const at = resLines.findIndex((l, i) => i > prev && l.trimStart().startsWith(`[${c.clause_id}] `));
+      const head = `[${c.clause_id}] `;
+      const at = resLines.findIndex((l, i) => i > prev && l.trimStart().startsWith(head));
       expect({ id: c.clause_id, found: at >= 0 }).toEqual({ id: c.clause_id, found: true });
       prev = at;
     }
