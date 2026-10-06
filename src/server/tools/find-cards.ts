@@ -27,9 +27,18 @@ export const findCards: ToolDefinition<{ name: z.ZodString }> = {
         count: 0,
       };
     }
-    const slugs = findSimilarCards(name, ctx.catalog.cards).map((c) => c.slug);
-    const cards = readCardSummaries(ctx.db, slugs);
+    const found = findSimilarCards(name, ctx.catalog.cards);
+    const cards = readCardSummaries(
+      ctx.db,
+      found.cards.map((c) => c.slug),
+    );
     if (cards.length === 0) return { text: "No cards found.", count: 0 };
-    return { text: cards.map((c) => renderCardLine(c)).join("\n"), count: cards.length };
+    const lines = cards.map((c) => renderCardLine(c));
+    if (found.total > cards.length) {
+      lines.push(
+        `Showing ${cards.length} of ${found.total} matches. Make the name more specific, or narrow with search_cards.`,
+      );
+    }
+    return { text: lines.join("\n"), count: cards.length };
   },
 };

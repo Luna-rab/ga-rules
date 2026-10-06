@@ -37,11 +37,14 @@ function matchesByPrefix(query: string[], name: string[]): boolean {
   return query.every((q) => name.some((w) => w.startsWith(q)));
 }
 
-// 名前の揺れを吸収して、似たカードを類似度順に最大 10 件返す。
+// 名前の揺れを吸収して、似たカードを類似度順に最大 10 件返す。total は打ち切る前の候補の数。
 // 先頭一致か、綴りの類似度が 0.75 以上のものを選ぶ。
-export function findSimilarCards(query: string, cards: NamedCard[]): NamedCard[] {
+export function findSimilarCards(
+  query: string,
+  cards: NamedCard[],
+): { cards: NamedCard[]; total: number } {
   const q = nameWords(query);
-  if (q.length === 0) return [];
+  if (q.length === 0) return { cards: [], total: 0 };
   const qLength = q.join("").length;
 
   const scored: { card: NamedCard; score: number }[] = [];
@@ -53,13 +56,11 @@ export function findSimilarCards(query: string, cards: NamedCard[]): NamedCard[]
     const prefixScore = prefix ? MIN_SIMILARITY + 0.2 * (qLength / n.join("").length) : 0;
     scored.push({ card, score: Math.max(sim, prefixScore) });
   }
-  return scored
-    .toSorted(
-      (a, b) =>
-        b.score - a.score ||
-        a.card.name.localeCompare(b.card.name) ||
-        a.card.slug.localeCompare(b.card.slug),
-    )
-    .slice(0, MAX_CANDIDATES)
-    .map((s) => s.card);
+  const sorted = scored.toSorted(
+    (a, b) =>
+      b.score - a.score ||
+      a.card.name.localeCompare(b.card.name) ||
+      a.card.slug.localeCompare(b.card.slug),
+  );
+  return { cards: sorted.slice(0, MAX_CANDIDATES).map((s) => s.card), total: sorted.length };
 }
