@@ -16,6 +16,13 @@ export const getTerm: ToolDefinition<{ term: z.ZodString }> = {
     "Returns every definition of one Grand Archive term (name or alias, case-insensitive), in full, with [clause_id] on each clause. Look up one term per call.",
   inputSchema: { term: z.string() },
   handler: (ctx, { term }) => {
+    if (term.trim() === "") {
+      return {
+        text: 'The term is empty. Pass one term name or alias, e.g. "Bulwark".',
+        isError: true,
+        count: 0,
+      };
+    }
     const found = findTerm(ctx.catalog.terms, term);
     if (!found) return { text: `No term matching "${term.trim()}" was found.`, count: 0 };
 
