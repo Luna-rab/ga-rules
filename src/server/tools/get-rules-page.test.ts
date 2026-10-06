@@ -47,12 +47,38 @@ describe("get_rules_page: 通常のページ", () => {
     expect(lines.some((l) => l.startsWith("例外:") && l.includes("Immortality"))).toBe(true);
   });
 
-  test("General Rules 以外の節の条文 ID も入る", () => {
-    const others = clausesOf("game-mechanics-damage").filter(
-      (c) => !c.clause_id.startsWith("game-mechanics-damage#General Rules:"),
-    );
-    expect(others.length).toBeGreaterThan(0);
-    for (const c of others) expect(out.text).toContain(`[${c.clause_id}]`);
+  test("節付きの page_id でも、索引にあるこのページの条文 ID がすべて入る", () => {
+    const clauses = clausesOf("game-mechanics-damage");
+    expect(clauses.length).toBe(21);
+    for (const c of clauses) expect(out.text).toContain(`[${c.clause_id}]`);
+  });
+
+  test("節が 2 つ以上あるページは、ある節の条文 ID を渡しても別の節の条文 ID が入り、節・条文の順に並ぶ", () => {
+    const pageId = "game-mechanics-counters";
+    const sections = ctx.db
+      .query("SELECT section_id FROM rule_section WHERE page_id = ? ORDER BY position")
+      .all(pageId)
+      .map((r) => z.object({ section_id: z.string() }).parse(r).section_id);
+    expect(sections.length).toBeGreaterThan(1);
+    const clauses = clausesOf(pageId);
+    const second = ctx.db
+      .query("SELECT clause_id FROM rule_clause WHERE section_id = ? ORDER BY position LIMIT 1")
+      .get(sections[1]);
+    const given = z.object({ clause_id: z.string() }).parse(second).clause_id;
+
+    const res = call(given);
+    expect(res.isError).toBeFalsy();
+    const resLines = res.text.split("\n");
+    let prev = -1;
+    for (const c of clauses) {
+      const at = resLines.findIndex((l, i) => i > prev && l.trimStart().startsWith(`[${c.clause_id}] `));
+      expect({ id: c.clause_id, found: at >= 0 }).toEqual({ id: c.clause_id, found: true });
+      prev = at;
+    }
+    const otherSection = clauses.find((c) => !c.clause_id.startsWith(`${sections[1]}:`));
+    expect(otherSection).toBeDefined();
+    expect(res.text).toContain(`[${otherSection?.clause_id}]`);
+    expect(res.text).toBe(call(pageId).text);
   });
 
   test("# 以降を付けないときも同じ text", () => {
