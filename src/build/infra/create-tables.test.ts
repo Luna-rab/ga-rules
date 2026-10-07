@@ -69,7 +69,11 @@ describe("createTables", () => {
 
   test("存在しない page_id を持つ rule_section は INSERT できない", async () => {
     const db = await freshDb();
-    insertRow(db, "rule_page", { page_id: "game-mechanics-damage", title: "Damage", body: "" });
+    insertRow(db, "rule_page", {
+      page_id: "game-mechanics-damage",
+      title: "Damage",
+      position: 0,
+    });
     // 親があれば入る（失敗の原因が page_id だけであることを確かめる）
     insertRow(db, "rule_section", {
       section_id: "game-mechanics-damage#General Rules",
@@ -105,7 +109,11 @@ describe("createTables", () => {
 
   test("FTS_REBUILD_SQL の後に rule_clause_fts を porter の語幹一致で引ける", async () => {
     const db = await freshDb();
-    insertRow(db, "rule_page", { page_id: "game-mechanics-damage", title: "Damage", body: "" });
+    insertRow(db, "rule_page", {
+      page_id: "game-mechanics-damage",
+      title: "Damage",
+      position: 0,
+    });
     insertRow(db, "rule_section", {
       section_id: "game-mechanics-damage#General Rules",
       page_id: "game-mechanics-damage",

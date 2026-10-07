@@ -1,24 +1,28 @@
 import { applyCardCorrections, CORRECTIONS } from "./domain/corrections";
 import { relate, toRulings } from "./domain/relate";
 import { parseRules } from "./domain/rules";
+import { assertOverviewPages, parseToc } from "./domain/rules/toc";
 import { extractTerms } from "./domain/terms";
 import { DATA_DIR } from "./infra/fetch/data-dir";
 import { writeIndex } from "./infra/index-writer";
-import { readCards, readRules } from "./infra/raw-store";
+import { readCards, readRules, readSummary } from "./infra/raw-store";
 
-// readRules/readCards → applyCardCorrections → parseRules → extractTerms → toRulings → relate → writeIndex
+// readRules/readCards/readSummary → applyCardCorrections → parseRules → assertOverviewPages → parseToc → extractTerms → toRulings → relate → writeIndex
 // DataError は writeIndex より前に投げられるので、outPath には何も書かない。
 export async function buildIndex(opts: { dataDir: string; outPath: string }): Promise<void> {
-  const [rawPages, rawCards] = await Promise.all([
+  const [rawPages, rawCards, summary] = await Promise.all([
     readRules(opts.dataDir),
     readCards(opts.dataDir),
+    readSummary(opts.dataDir),
   ]);
   const cards = applyCardCorrections(rawCards, CORRECTIONS);
   const pages = parseRules(rawPages, CORRECTIONS);
+  assertOverviewPages(pages);
+  const toc = parseToc(summary, pages);
   const terms = extractTerms(pages);
   const rulings = toRulings(cards);
   const relations = relate({ pages, terms, cards, rulings });
-  await writeIndex(opts.outPath, { pages, terms, cards, rulings, relations });
+  await writeIndex(opts.outPath, { pages, toc, terms, cards, rulings, relations });
 }
 
 // 使い方: bun run build:index [出力先]

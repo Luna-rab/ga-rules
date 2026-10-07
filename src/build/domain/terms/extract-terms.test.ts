@@ -8,7 +8,6 @@ function page(pageId: string, title: string, headings: (string | [string, Sectio
   return {
     pageId,
     title,
-    body: "",
     sections: headings.map((h) => {
       const [heading, kind] = typeof h === "string" ? [h, "heading" as const] : h;
       return { sectionId: `${pageId}#${heading}`, pageId, heading, kind, clauses: [] };

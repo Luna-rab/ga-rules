@@ -4,12 +4,13 @@ import { drizzle } from "drizzle-orm/bun-sqlite";
 import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { FTS_REBUILD_SQL } from "../../shared/db/fts";
 import * as schema from "../../shared/db/schema";
-import type { Card, Page, Ruling, Term } from "../domain/model";
+import type { Card, Page, Ruling, Term, TocEntry } from "../domain/model";
 import type { Relations } from "../domain/relate";
 import { createTables } from "./create-tables";
 
 export type IndexData = {
   pages: Page[];
+  toc: TocEntry[];
   terms: Term[];
   cards: Card[];
   rulings: Ruling[];
@@ -52,26 +53,46 @@ export async function writeIndex(outPath: string, data: IndexData): Promise<void
 type Insert = <T extends SQLiteTable>(table: T, rows: T["$inferInsert"][]) => void;
 
 // 外部キーの参照先から順に書く。
-function insertRows(insert: Insert, { pages, terms, cards, rulings, relations }: IndexData): void {
+function insertRows(
+  insert: Insert,
+  { pages, toc, terms, cards, rulings, relations }: IndexData,
+): void {
   const sections = pages.flatMap((p) => p.sections);
   const clauses = sections.flatMap((s) => s.clauses);
+  const titles = new Map(pages.map((p) => [p.pageId, p.title]));
 
   insert(
     schema.rulePage,
-    pages.map((p) => ({ pageId: p.pageId, title: p.title, body: p.body })),
+    // 親が子より先に並ぶよう position の順に書く（parent_page_id の外部キーのため）
+    toc.map((e) => ({
+      pageId: e.pageId,
+      title: titles.get(e.pageId) ?? "",
+      parentPageId: e.parentPageId,
+      position: e.position,
+    })),
   );
   insert(
     schema.ruleSection,
-    sections.map((s) => ({ sectionId: s.sectionId, pageId: s.pageId, heading: s.heading })),
+    pages.flatMap((p) =>
+      p.sections.map((s, position) => ({
+        sectionId: s.sectionId,
+        pageId: s.pageId,
+        heading: s.heading,
+        position,
+      })),
+    ),
   );
   insert(
     schema.ruleClause,
-    clauses.map((c) => ({
-      clauseId: c.clauseId,
-      sectionId: c.sectionId,
-      number: c.number,
-      text: c.text,
-    })),
+    sections.flatMap((s) =>
+      s.clauses.map((c, position) => ({
+        clauseId: c.clauseId,
+        sectionId: c.sectionId,
+        number: c.number,
+        text: c.text,
+        position,
+      })),
+    ),
   );
   insert(
     schema.clauseLink,
@@ -118,6 +139,7 @@ function insertRows(insert: Insert, { pages, terms, cards, rulings, relations }:
     schema.cardRuling,
     rulings.map((r) => ({
       rulingId: r.rulingId,
+      citeId: r.citeId,
       cardSlug: r.cardSlug,
       dateAdded: r.dateAdded,
       title: r.title,

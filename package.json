@@ -12,7 +12,8 @@
     "fmt:check": "oxfmt --check",
     "lint": "oxlint",
     "typecheck": "tsc",
-    "test": "bun test",
+    "test": "bun test src/build src/shared",
+    "test:server": "bun test src/server",
     "check": "bun run fmt:check && bun run lint && bun run typecheck && bun run test"
   },
   "dependencies": {

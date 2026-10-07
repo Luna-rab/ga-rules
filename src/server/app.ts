@@ -1,13 +1,13 @@
-import type { Database } from "bun:sqlite";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { Hono } from "hono";
+import type { ToolContext } from "./context";
 import { createMcpServer } from "./mcp";
 
-export function createApp(db: Database): Hono {
+export function createApp(ctx: ToolContext): Hono {
   const app = new Hono();
 
   app.all("/mcp", async (c) => {
-    const server = createMcpServer(db);
+    const server = createMcpServer(ctx);
     const transport = new WebStandardStreamableHTTPServerTransport({
       // undefined で stateless。Cloud Run は別の台に振り分けることがあるので、セッションを持たない。
       sessionIdGenerator: undefined,

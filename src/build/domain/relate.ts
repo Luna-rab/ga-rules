@@ -1,14 +1,19 @@
+import { formatRulingCiteId } from "../../shared/cite";
 import { DataError } from "./errors";
 import type { Card, Page, Ruling, Term } from "./model";
 import { Matcher } from "./terms";
 
-// rule をカードごとに 1 行ずつ。同じ文面でもまとめない。rulingId は 1 から
+// rule をカードごとに 1 行ずつ。同じ文面でもまとめない。rulingId は 1 から。citeId の n は同じカード・同じ日付の中で 1 から
 export function toRulings(cards: Card[]): Ruling[] {
   const rulings: Ruling[] = [];
   for (const card of cards) {
+    const perDate = new Map<string, number>();
     for (const r of card.rule ?? []) {
+      const n = (perDate.get(r.date_added) ?? 0) + 1;
+      perDate.set(r.date_added, n);
       rulings.push({
         rulingId: rulings.length + 1,
+        citeId: formatRulingCiteId({ cardSlug: card.slug, date: r.date_added, n }),
         cardSlug: card.slug,
         dateAdded: r.date_added,
         title: r.title,

@@ -33,7 +33,6 @@ function pageWith(texts: string[]): Page {
   return {
     pageId: "p",
     title: "P",
-    body: "",
     sections: [
       {
         sectionId: "p#S",
@@ -57,7 +56,18 @@ function term(termId: number, name: string, aliases: string[] = []): Term {
 }
 
 function ruling(rulingId: number, cardSlug: string, description: string): Ruling {
-  return { rulingId, cardSlug, dateAdded: "2024-01-01", title: "Q", description };
+  return {
+    rulingId,
+    citeId: `${cardSlug}#ruling:2024-01-01:${rulingId}`,
+    cardSlug,
+    dateAdded: "2024-01-01",
+    title: "Q",
+    description,
+  };
+}
+
+function rawRuling(date_added: string): RawRuling {
+  return { title: "T", date_added, description: "D." };
 }
 
 function ref(slug: string, kind = "MASTERY"): CardReference {
@@ -80,6 +90,7 @@ describe("toRulings", () => {
     expect(rulings.map((r) => r.rulingId).toSorted((a, b) => a - b)).toEqual([1, 2]);
     expect(rulings).toContainEqual({
       rulingId: expect.any(Number),
+      citeId: expect.any(String),
       cardSlug: "a-card",
       dateAdded: "2025-06-27",
       title: "Omen",
@@ -87,11 +98,30 @@ describe("toRulings", () => {
     });
     expect(rulings).toContainEqual({
       rulingId: expect.any(Number),
+      citeId: expect.any(String),
       cardSlug: "b-card",
       dateAdded: "2025-12-04",
       title: "Omen",
       description: same.description,
     });
+  });
+
+  test("citeId は取得元の順に、同じカード・同じ日付の中で 1 から数える", () => {
+    const rulings = toRulings([
+      card("beguiling-coup", "Beguiling Coup", {
+        rule: [rawRuling("2025-07-18"), rawRuling("2025-07-18"), rawRuling("2025-06-27")],
+      }),
+      card("other-card", "Other Card", { rule: [rawRuling("2025-07-18")] }),
+    ]);
+
+    expect(rulings.filter((x) => x.cardSlug === "beguiling-coup").map((x) => x.citeId)).toEqual([
+      "beguiling-coup#ruling:2025-07-18:1",
+      "beguiling-coup#ruling:2025-07-18:2",
+      "beguiling-coup#ruling:2025-06-27:1",
+    ]);
+    expect(rulings.find((x) => x.cardSlug === "other-card")?.citeId).toBe(
+      "other-card#ruling:2025-07-18:1",
+    );
   });
 
   test("1 枚に裁定が複数あれば全部を行にし、rule が null のカードは行を作らない", () => {
