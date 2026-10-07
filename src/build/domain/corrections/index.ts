@@ -1,10 +1,13 @@
 import { DataError } from "../errors";
-import type { Card, LinkTarget } from "../model";
+import type { Card, LinkTarget, Ruling } from "../model";
+import { ERRATA_CORRECTIONS } from "./errata";
 
 export type Correction =
   | { kind: "card-reference"; cardSlug: string; from: string; to: string; reason: string } // references[].slug を直す
   | { kind: "rule-link"; path: string; from: string; to: LinkTarget | null; reason: string } // path は RawPage.path、from はリンクの括弧内そのまま。null はリンクを外して文字だけ残す
-  | { kind: "rule-text"; path: string; from: string; to: string; reason: string }; // 原文の from（ページに 1 か所だけ）を to に置き換える。一般の規則で直せない文の崩れに使う
+  | { kind: "rule-text"; path: string; from: string; to: string; reason: string } // 原文の from（ページに 1 か所だけ）を to に置き換える。一般の規則で直せない文の崩れに使う
+  | { kind: "card-text"; cardSlug: string; from: string; to: string; reason: string } // effect_raw の from（1 か所だけ）を to に置き換える。ERRATA を効果テキストに当てるのに使う
+  | { kind: "ruling-title"; citeId: string; to: string; reason: string }; // 裁定の題を直す
 
 const CRYSTAL_MASTERY_REASON =
   "API に crystal-mastery のカードは無く（404）、参照の name は Fractured Memories";
@@ -69,12 +72,24 @@ export const CORRECTIONS: readonly Correction[] = [
     reason:
       "GitBook の壊れたリンク（/broken/pages/）。リンクの文字が characteristics なので、カードの特性のページの General Rules を指す",
   },
+  {
+    kind: "ruling-title",
+    citeId: "archon-broadsword#ruling:2026-08-16:1",
+    to: "ERRATA",
+    reason:
+      "題が空だが、説明は use this weapon for an attack, pay 2. -> wield this weapon, pay 2. という効果テキストの書き換えで、同じ日のほかのカードの ERRATA と同じ言い換え",
+  },
+  ...ERRATA_CORRECTIONS,
 ];
 
-// card-reference の項目だけを当てる。当たらない項目は名指しして DataError
+// card-reference と card-text の項目を当てる。当たらない項目は名指しして DataError
 export function applyCardCorrections(cards: Card[], corrections: readonly Correction[]): Card[] {
   const out = cards.map((c) => (c.references ? { ...c, references: [...c.references] } : c));
   for (const fix of corrections) {
+    if (fix.kind === "card-text") {
+      applyCardText(out, fix);
+      continue;
+    }
     if (fix.kind !== "card-reference") continue;
     const target = out.find((c) => c.slug === fix.cardSlug);
     if (!target) {
@@ -92,6 +107,35 @@ export function applyCardCorrections(cards: Card[], corrections: readonly Correc
       );
     }
     target.references = refs.map((r) => (r.slug === fix.from ? { ...r, slug: fix.to } : r));
+  }
+  return out;
+}
+
+// from は効果テキストにちょうど 1 回現れなければならない
+function applyCardText(cards: Card[], fix: Extract<Correction, { kind: "card-text" }>): void {
+  const where = `correction card-text ${fix.cardSlug}`;
+  const i = cards.findIndex((c) => c.slug === fix.cardSlug);
+  const target = cards[i];
+  if (!target) throw new DataError(where, `カード ${fix.cardSlug} が無い`);
+  const effect = target.effect_raw ?? "";
+  const count = effect.split(fix.from).length - 1;
+  if (count !== 1)
+    throw new DataError(where, `文 ${fix.from} が ${count} か所にある（1 か所のはず）`);
+  cards[i] = { ...target, effect_raw: effect.replace(fix.from, () => fix.to) };
+}
+
+// ruling-title の項目を当てる。cite ID の裁定が無い項目は名指しして DataError
+export function applyRulingCorrections(
+  rulings: Ruling[],
+  corrections: readonly Correction[],
+): Ruling[] {
+  const out = [...rulings];
+  for (const fix of corrections) {
+    if (fix.kind !== "ruling-title") continue;
+    const i = out.findIndex((r) => r.citeId === fix.citeId);
+    const target = out[i];
+    if (!target) throw new DataError(`correction ruling-title ${fix.citeId}`, "裁定が無い");
+    out[i] = { ...target, title: fix.to };
   }
   return out;
 }

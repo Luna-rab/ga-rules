@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { DataError } from "../errors";
-import type { Card, CardReference } from "../model";
-import { applyCardCorrections, CORRECTIONS, type Correction } from "./index";
+import type { Card, CardReference, Ruling } from "../model";
+import {
+  applyCardCorrections,
+  applyRulingCorrections,
+  CORRECTIONS,
+  type Correction,
+} from "./index";
 
 function card(slug: string, references: CardReference[] | null): Card {
   return {
@@ -111,6 +116,74 @@ describe("applyCardCorrections", () => {
   });
 });
 
+function withEffect(effect: string): Card[] {
+  return [{ ...card("hammer", null), effect_raw: effect }];
+}
+
+function wield(from: string, cardSlug = "hammer"): Correction {
+  return { kind: "card-text", cardSlug, from, to: "wields this weapon", reason: "テスト" };
+}
+
+describe("applyCardCorrections: card-text", () => {
+  test("効果テキストの from を to に置き換え、ほかの文は変えない", () => {
+    const out = applyCardCorrections(withEffect("Whenever a unit uses this weapon, draw."), [
+      wield("uses this weapon"),
+    ]);
+    expect(out[0]?.effect_raw).toBe("Whenever a unit wields this weapon, draw.");
+  });
+
+  test("元のカードを書き換えない", () => {
+    const input = withEffect("uses this weapon");
+    applyCardCorrections(input, [wield("uses this weapon")]);
+    expect(input[0]?.effect_raw).toBe("uses this weapon");
+  });
+
+  test("カードが無い項目は slug を添えて DataError", () => {
+    const e = thrown(() => applyCardCorrections(withEffect("x"), [wield("x", "no-such-card")]));
+    expect(e.message).toContain("no-such-card");
+  });
+
+  test.each([
+    { effect: "Draw a card.", count: 0 },
+    { effect: "uses this weapon, then uses this weapon", count: 2 },
+  ])("from が $count か所にあれば DataError", ({ effect, count }) => {
+    const e = thrown(() => applyCardCorrections(withEffect(effect), [wield("uses this weapon")]));
+    expect(e.message).toContain(`${count} か所`);
+  });
+});
+
+function rulingOf(citeId: string, title: string): Ruling {
+  return {
+    rulingId: 1,
+    citeId,
+    cardSlug: citeId.slice(0, citeId.indexOf("#")),
+    dateAdded: "2026-08-16",
+    title,
+    description: "use for an attack -> wield",
+  };
+}
+
+describe("applyRulingCorrections", () => {
+  const toErrata: Correction = {
+    kind: "ruling-title",
+    citeId: "hammer#ruling:2026-08-16:1",
+    to: "ERRATA",
+    reason: "テスト",
+  };
+
+  test("cite ID の裁定の題を to にし、ほかの裁定は変えない", () => {
+    const other = rulingOf("hammer#ruling:2026-08-16:2", "");
+    const out = applyRulingCorrections([rulingOf(toErrata.citeId, ""), other], [toErrata]);
+    expect(out.map((r) => r.title)).toEqual(["ERRATA", ""]);
+    expect(out[1]).toBe(other);
+  });
+
+  test("cite ID の裁定が無い項目は cite ID を添えて DataError", () => {
+    const e = thrown(() => applyRulingCorrections([], [toErrata]));
+    expect(e.message).toContain(toErrata.citeId);
+  });
+});
+
 describe("CORRECTIONS", () => {
   test("どの項目も reason が空でない", () => {
     expect(CORRECTIONS.length).toBeGreaterThan(0);
@@ -174,7 +247,8 @@ describe("CORRECTIONS", () => {
       ),
       card("fractured-memories", []),
     ];
-    const out = applyCardCorrections(input, CORRECTIONS);
+    const references = CORRECTIONS.filter((c) => c.kind === "card-reference");
+    const out = applyCardCorrections(input, references);
     for (const s of slugs) {
       expect(out.find((c) => c.slug === s)?.references?.[0]?.slug).toBe("fractured-memories");
     }
