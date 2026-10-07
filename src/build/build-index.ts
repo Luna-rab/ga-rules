@@ -3,12 +3,12 @@ import { assertErrataApplied } from "./domain/errata";
 import { relate, toRulings } from "./domain/relate";
 import { parseRules } from "./domain/rules";
 import { assertOverviewPages, parseToc } from "./domain/rules/toc";
-import { extractTerms } from "./domain/terms";
+import { assertTermSources, extractTerms } from "./domain/terms";
 import { DATA_DIR } from "./infra/fetch/data-dir";
 import { writeIndex } from "./infra/index-writer";
 import { readCards, readRules, readSummary } from "./infra/raw-store";
 
-// readRules/readCards/readSummary → applyCardCorrections → parseRules → assertOverviewPages → parseToc → extractTerms → toRulings → applyRulingCorrections → assertErrataApplied → relate → writeIndex
+// readRules/readCards/readSummary → applyCardCorrections → parseRules → assertOverviewPages → parseToc → extractTerms → assertTermSources → toRulings → applyRulingCorrections → assertErrataApplied → relate → writeIndex
 // DataError は writeIndex より前に投げられるので、outPath には何も書かない。
 export async function buildIndex(opts: { dataDir: string; outPath: string }): Promise<void> {
   const [rawPages, rawCards, summary] = await Promise.all([
@@ -21,6 +21,7 @@ export async function buildIndex(opts: { dataDir: string; outPath: string }): Pr
   assertOverviewPages(pages);
   const toc = parseToc(summary, pages);
   const terms = extractTerms(pages);
+  assertTermSources(pages, terms);
   const rulings = applyRulingCorrections(toRulings(cards), CORRECTIONS);
   assertErrataApplied(cards, rulings);
   const relations = relate({ pages, terms, cards, rulings });

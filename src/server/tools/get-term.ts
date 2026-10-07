@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  findTerm,
+  findTerms,
   generalSections,
   GLOSSARY_PAGE_IDS,
   glossaryTermNames,
@@ -13,7 +13,7 @@ import type { ToolDefinition } from "./types";
 export const getTerm: ToolDefinition<{ term: z.ZodString }> = {
   name: "get_term",
   description:
-    "Returns every definition of one Grand Archive term (name or alias, case-insensitive), in full, with [clause_id] on each clause. Look up one term per call.",
+    'Returns every definition of one Grand Archive term (name or alias, case-insensitive), in full, with [clause_id] on each clause. Headings as displayed ("Ranged N", "Died/Dies and Kills/Killed"), plurals, verb forms, hyphens and spacing all match the same term. Look up one term per call.',
   inputSchema: { term: z.string() },
   handler: (ctx, { term }) => {
     if (term.trim() === "") {
@@ -23,8 +23,15 @@ export const getTerm: ToolDefinition<{ term: z.ZodString }> = {
         count: 0,
       };
     }
-    const found = findTerm(ctx.catalog.terms, term);
+    const matches = findTerms(ctx.catalog.terms, term);
+    const found = matches[0];
     if (!found) return { text: `No term matching "${term.trim()}" was found.`, count: 0 };
+    if (matches.length > 1) {
+      return {
+        text: `"${term.trim()}" matches several terms: ${matches.map((t) => t.name).join(", ")}. Call get_term with one of them.`,
+        count: 0,
+      };
+    }
 
     const blocks: string[] = [];
     for (const def of found.definitions) {

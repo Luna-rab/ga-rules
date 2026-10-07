@@ -128,7 +128,10 @@ function putValidData(): void {
 
   put(
     "rules/glossary/game-terms.md",
-    "# Game Terms\n\n#### Negated&#x20;\n\n1. An effect that is negated does nothing. See [negated](game-terms.md#negated).\n",
+    "# Game Terms\n\n#### Negated&#x20;\n\n1. An effect that is negated does nothing. See [negated](game-terms.md#negated).\n\n" +
+      "#### Destruction\n\n1. Destroy moves an object to the graveyard.\n\n" +
+      "#### Control and Ownership\n\n1. The owner controls the card by default.\n\n" +
+      "#### Label Keywords\n\n1. List of Label keywords:\n- Upkeep: A cost paid each turn.\n",
   );
   put(
     "rules/general-rules/general-rules-card-characteristics/README.md",

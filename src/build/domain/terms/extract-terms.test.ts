@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { Page, SectionKind, Term } from "../model";
-import { extractTerms, Matcher } from ".";
+import type { Clause, Page, SectionKind, Term } from "../model";
+import { DataError } from "../errors";
+import { assertTermSources, extractTerms, Matcher } from ".";
 
 // 条文は用語の抽出に使わないので、節は見出しと種類だけを持たせる。
 // 文字列だけ渡した節は #### の見出し（kind "heading"）
@@ -13,6 +14,10 @@ function page(pageId: string, title: string, headings: (string | [string, Sectio
       return { sectionId: `${pageId}#${heading}`, pageId, heading, kind, clauses: [] };
     }),
   };
+}
+
+function clause(sectionId: string, number: string, text: string): Clause {
+  return { clauseId: `${sectionId}:${number}`, sectionId, number, text, links: [] };
 }
 
 function find(terms: Term[], name: string): Term | undefined {
@@ -200,17 +205,22 @@ describe("extractTerms", () => {
     expect(intent?.definitions).toContainEqual({ pageId: "game-zones-intent", sectionId: null });
   });
 
-  test("語彙は heading の節とページ題だけから作り、lead と minor の節からは作らない", () => {
+  test("lead の節と、minor の節のうち番号付きの手順と末尾が `:` の前置きからは作らない", () => {
     const terms = extractTerms([
       page("game-zones-intent", "Game Zones - Intent", [
         ["Intent", "lead"],
         ["Declaring Intent", "heading"],
         ["Leveling Up", "minor"],
         ["1.1 Announcing Activation", "minor"],
+        ["Masteries:", "minor"],
       ]),
     ]);
 
-    expect(terms.map((t) => t.name).toSorted()).toEqual(["Declaring Intent", "Intent"]);
+    expect(terms.map((t) => t.name).toSorted()).toEqual([
+      "Declaring Intent",
+      "Intent",
+      "Leveling Up",
+    ]);
     expect(find(terms, "Intent")?.definitions).toEqual([
       { pageId: "game-zones-intent", sectionId: null },
     ]);
@@ -219,15 +229,77 @@ describe("extractTerms", () => {
     ]);
   });
 
-  test("同じ見出しが別のページでは minor だと、heading の節の定義だけを持つ", () => {
+  test("書き方の違う見出しを 1 つの Term にまとめる: X Counters と X、単数と複数", () => {
     const terms = extractTerms([
-      page("card-types-champion", "Card Types - Champion", [["Leveling Up", "minor"]]),
-      page("game-terms", "Glossary - Game Terms", [["Leveling Up", "heading"]]),
+      page("game-mechanics-counters", "Game Mechanics - Counters", ["Buff"]),
+      page("game-terms", "Glossary - Game Terms", ["Buff Counters", "Token"]),
+      page("game-mechanics-tokens", "Game Mechanics - Tokens", []),
     ]);
 
-    expect(find(terms, "Leveling Up")?.definitions).toEqual([
-      { pageId: "game-terms", sectionId: "game-terms#Leveling Up" },
+    expect(find(terms, "Buff")?.aliases).toEqual(["Buff Counters"]);
+    expect(find(terms, "Buff")?.definitions).toEqual([
+      { pageId: "game-mechanics-counters", sectionId: "game-mechanics-counters#Buff" },
+      { pageId: "game-terms", sectionId: "game-terms#Buff Counters" },
     ]);
+    expect(find(terms, "Token")?.aliases).toEqual(["Tokens"]);
+    expect(find(terms, "Token")?.definitions).toEqual([
+      { pageId: "game-terms", sectionId: "game-terms#Token" },
+      { pageId: "game-mechanics-tokens", sectionId: null },
+    ]);
+  });
+
+  test("Label Keywords の箇条書きと、小見出しの役をする条文から Term を作る", () => {
+    const labels = "game-terms#Label Keywords";
+    const weapons = "card-types-functional-subtypes#Functional Weapons";
+    const terms = extractTerms([
+      {
+        pageId: "game-terms",
+        title: "Glossary - Game Terms",
+        sections: [
+          {
+            sectionId: labels,
+            pageId: "game-terms",
+            heading: "Label Keywords",
+            kind: "heading",
+            clauses: [
+              clause(labels, "3", "List of Label keywords:\n- Balance: ...\n- Deluge N: ..."),
+            ],
+          },
+        ],
+      },
+      {
+        pageId: "card-types-functional-subtypes",
+        title: "Card Types - Functional Subtypes",
+        sections: [
+          {
+            sectionId: weapons,
+            pageId: "card-types-functional-subtypes",
+            heading: "Functional Weapons",
+            kind: "heading",
+            clauses: [
+              clause(weapons, "1", "Gun / Bow"),
+              clause(weapons, "1.a", "Gun and Bow are functional weapon subtypes."),
+              clause(weapons, "2", "No sub-clauses"),
+            ],
+          },
+        ],
+      },
+    ]);
+
+    for (const name of ["Balance", "Deluge"]) {
+      expect(find(terms, name)?.definitions).toEqual([{ pageId: "game-terms", sectionId: labels }]);
+    }
+    for (const name of ["Gun", "Bow"]) {
+      expect(find(terms, name)?.definitions).toEqual([
+        { pageId: "card-types-functional-subtypes", sectionId: weapons },
+      ]);
+    }
+    expect(find(terms, "No sub-clauses")).toBeUndefined();
+  });
+
+  test("assertTermSources: Label Keywords の節が無いと DataError", () => {
+    const pages = [page("game-terms", "Glossary - Game Terms", ["Destruction"])];
+    expect(() => assertTermSources(pages, extractTerms(pages))).toThrow(DataError);
   });
 
   test("termId は 1 から振り、重ならない", () => {

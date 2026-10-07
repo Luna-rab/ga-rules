@@ -292,9 +292,12 @@ flowchart LR
 
 条文・カード・裁定と、用語やカード名とを結ぶ。すべてビルド時の文字列照合で、実行時には計算しない。
 
-- **語彙**: 全ページの `####` 見出しと、ページ題の最後の区切り（`# Game Zones - Intent` → `Intent`）から作る。約 316 語。用語集の見出しだけでは足りない。`Omen` は `game-mechanics-counters.md` の節に、`Intent` は 1 ページ丸ごとに定義があり、用語集には無い。
+- **語彙**: 全ページの `####` 見出しと、ページ題の最後の区切り（`# Game Zones - Intent` → `Intent`）から作る。約 310 語。用語集の見出しだけでは足りない。`Omen` は `game-mechanics-counters.md` の節に、`Intent` は 1 ページ丸ごとに定義があり、用語集には無い。
   - `General Rules` / `General Rules:` の節（80 個）は用語にしない。
   - 見出しから機械的に名前を作る。`<a id>` を外し、末尾の ` N`（`Critical N`）と括弧の補足（`Lineage (term)`）を外す。`/` と `and` で並んだ語（`Activate/Activating`・`Died/Dies and Kills/Killed`）は別名として持つ。
+  - `###`・行頭の太字の見出し（`Deleveling`）も用語にする。`Delevel` の定義はここにしか無い。番号付きの手順（`1.1 Announcing Activation`）と末尾が `:` の前置き（`Masteries:`）は外す。
+  - 見出しでなく条文に名前がある用語も拾う。`Label Keywords` の箇条書き（`Deluge`・`Upkeep`）と、機能サブタイプのページで小見出しの役をする条文（`Siegeable`・`Gun / Bow / Aetherwing`）。
+  - 複数形・ハイフン・空白・`X Counters` の Counters を落としたキー（`src/shared/term-key.ts` の `termKey`）が同じ見出しは 1 語にまとめる。`Buff` と `Buff Counters`、`Token` と `Tokens`（ページ）は同じものの定義が別の場所にあり、分けると片方しか返らない。動詞の活用は原形に戻さない。`Load` と `Loaded`、`Negate` と `Negated`、`Link` と `Linked` は別の用語。
 - **名前と定義の場所を分ける**: 同じ名前の定義が複数の場所にある。`Bulwark`（カウンターとキーワード能力）・`Durability`（ステータスとカウンター）・`Lineage`（用語とキーワード能力）は意味が違い、`Redirect`・`Last-Known Information` は詳しい説明と用語集の要約。本文の「Bulwark」がどちらの意味かは文字列の照合では決められないので、本文の語は名前（`term`）に結び、`get_term` は定義（`term_definition`）をすべて返して、文脈からモデルに選ばせる。定義を 1 つに絞ると、カウンターとしての意味などが消える。
 - **当たったものはすべて記録する**: 1 枚あたり中央値 7 語、上位 10% で 10 語当たり、大半は `Champion`（942 枚）・`Target`（773 枚）のような基本語。索引には事実をすべて持たせ、何を見せるか（当たるカードが少ない順に上位 N 語など）はツールの側で決める。除外リストやしきい値を索引に埋め込むと、使ってみて変えたいときに取り込みからやり直しになる。
 - **記録する単位**: ルール文書は条文単位で結ぶ（`clause_term`・`clause_card`）。ページ単位では「どの条文か」を後から復元できず、モデルが最大 3,000 トークンのページを丸ごと読むことになる。ページ単位が欲しいときは条文からたどる。
@@ -464,7 +467,16 @@ graph DB は使わない。参照は最大 2 ホップで閉路が無く、結�
 
 ### get_term
 
-- 1 語だけ受け付ける。用語名か別名で、大文字小文字を区別しない（区別せずに重なる名前は無い）。
+- 1 語だけ受け付ける。モデルは条文の見出しや検索結果から語を写すので、書き方の違いで外さないよう、3 段で探す。
+  1. `termKey` が用語名か別名と同じ。見出しの表示どおり（`Ranged N`）、単数・複数、ハイフン・空白の違いが当たる。
+  2. 無ければ、活用を原形に戻し、末尾の ` Phase` も落とした `looseKey` で比べる（`Imbued` → `Imbue`、`Recollection` → `Recollection Phase`）。
+  3. 無ければ、派生語の表（`src/shared/term-key.ts` の `TERM_SYNONYMS`。`destroy` → `Destruction`、`Owner` → `Control and Ownership`）。
+  - 単数化と原形への戻しは、英語の辞書を持つ `compromise` に任せる。語尾を規則で削ると、`Status` と `Statuses` が合わず、`States` と `Stats` が重なる。
+  - 2・3 の書き方は索引の別名に入れない。別名は本文との照合にも使うので、`Control`・`destroy` を入れるとほぼすべての条文とカードに用語が結ばれる。
+  - `and` で並んだ題を語に分けては比べない。`Card` が `Card and Object Information` に当たってしまう。
+  - `/` で並んだ入力（`Died/Dies and Kills/Killed`・`Gun / Bow / Aetherwing`）は、全体で当たらなければ各部分の当たりを合わせる。
+  - 2 語以上に当たったら（`waking up` → `Wake Up`・`Wake Up Phase`）、候補の名前を返して 1 語に絞って呼び直させる。
+  - `TERM_SYNONYMS` の行き先の用語と、`Label Keywords` の箇条書きが無くなったら、ビルドを `DataError` で止める。どちらも名前を名指ししているので、ルール文書の改訂で黙って効かなくなる。
 - 定義は節もページも全文で返す。節かページかで大きさは決まらず（用語集の節は中央値 107・最大 523 トークン、ページの定義は中央値 366・最大 3,037 トークン。`Memory` のページは 93 トークン）、どちらを持つかは語ごとにばらばら（節だけ 193 語・ページだけ 102 語・両方 5 語）で、モデルは呼ぶ前に知らない。サマリーと詳細にツールを分けると、モデルが呼び分けを当てられず空振りする。
 - 用語集のページそのものを指す語（`Keywords and Abilities`・`Game Terms`）には、用語名の一覧を返す。
 
