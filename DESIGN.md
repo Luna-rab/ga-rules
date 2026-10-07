@@ -104,6 +104,7 @@ src/build/
     model.ts              Page / Section / Clause / Term / Card / Ruling などの型
     errors.ts             DataError
     corrections/          修正の一覧（データ）と適用
+    errata/               効果テキストに当たっていない ERRATA の検出
     rules/                ページ・節・条文への分解、リンクの解決と書き換え
     terms/                用語・別名・定義の場所の抽出、照合器
     relate.ts             条文・カード・裁定と、用語・カード名を結ぶ
@@ -316,6 +317,17 @@ flowchart LR
 - 2026-10 時点で一覧に入れるもの
   - カード参照の slug `crystal-mastery` → `fractured-memories`（5 本。参照の `name` は `Fractured Memories` で、API に `crystal-mastery` は無く 404）。
   - リンク先の節が無いリンク 3 本: `game-terms.md#negated`、`game-terms.md#have-gain-get-become-are`、`general-rules-card-characteristics/#changing-characteristics-type-overwriting-and-type-setting`。
+  - 効果テキストに当たっていない ERRATA（61 枚）。`card-text` として `src/build/domain/corrections/errata.ts` に置く。
+  - 題が空の ERRATA 1 件（`archon-broadsword`）。`ruling-title` で題を直す。
+- ERRATA を効果テキストに当てる
+  - API の効果テキスト（`effect_raw`）は、ERRATA を反映済みのカードと未反映のカードが混ざっている。未反映のまま出すと、モデルが直す前の文面を引用する。
+  - ERRATA の文面は断片で（`your -> their owner's` の `your` が効果テキストに 3 か所ある）、句読点や表記（`’`、`pay 2`、`power`）も効果テキストと揃わない。自動では置き換えず、置き換える箇所と文面をカードごとに `card-text` で書く。
+  - ビルドは、ERRATA の左側（直す前）が効果テキストに残り右側（直した後）が無いカードを探し、あればビルドを止める。取得し直して増えた ERRATA に気付くため。比べる前に引用符・大文字小文字・空白・`(2)` の括弧をそろえる。
+    - 語を消す ERRATA（`sacrifice another ally you control. -> sacrifice another ally.`）は、当てたあとも右側が左側の中に見つかるので、左側が残っているかだけで決める。
+    - 大文字小文字だけを変える ERRATA（`Token -> token`）は、大文字小文字を区別して比べる。
+    - 矢印の無い ERRATA（直した後の文全体を書いたもの、`Added 'Specter' subtype.` など）は、どこを直すかが決まらないので確かめない。2026-10 時点の 10 件は、効果テキストか API の列に当たっていることを人が確かめた。
+  - 題が空の `archon-broadsword#ruling:2026-08-16:1` は、`ruling-title` で題を `ERRATA` に直す。題が空で矢印のある裁定をすべて ERRATA にする規則は採らない。普通の裁定が矢印を含むと、検索から消える。
+  - Type・cost・speed を直す ERRATA は API の列に反映済みなので扱わない。
 - 採らなかった方法: slug で見つからなければ名前で探す、のような自動の補正。どのデータをどう直したかがコードに残らず、別の壊れ方も黙って通してしまう。
 
 ## データベース
@@ -450,13 +462,13 @@ graph DB は使わない。参照は最大 2 ホップで閉路が無く、結�
 - 検索語を英数字の単語に分け、どれか 1 語を含むものを FTS5 の関連度順に返す。全単語を含むものだけにすると、文の形の問い合わせ（「activate ability during opponent turn」）が 0 件になる。文字列を FTS5 の式として渡すと、`last-known information` や `Class Bonus (2)` が構文エラーになる。ほぼ必ず何かが返るので、該当なしの判断はモデルがする。説明文に「上位が質問に答えていなければ該当なしとして扱う」と書く。
 - 条文と裁定は見出しを分けて最大 7 件と 3 件。FTS5 の関連度は索引ごとに語の珍しさを数えるので比べられず、混ぜて並べると片方が 0 件になりうる。裁定にしか答えが無い質問に枠を残す。
 - 同じ文面の裁定は 1 件にまとめ、付いているカードの枚数と 3 枚までの名前を添える。
-- ERRATA（166 件）は検索から外す。中身は `using -> with` のような書き換えの差分で、カードの文面と並べないと意味が取れない。`get_card` では全件返す。
+- ERRATA（167 件）は検索から外す。中身は `using -> with` のような書き換えの差分で、カードの文面と並べないと意味が取れない。効果テキストを直すものは効果テキストに当て済みで、`get_card` では全件返す。
 
 ### find_cards と get_card
 
 - `get_card` は slug の完全一致だけを受け付ける。名前で受けると、揺れた名前で別のカードを返して出典を取り違える。
 - `find_cards` は名前の揺れを吸収して候補を返す。名前を小文字にし記号を外したうえで、入力の語がすべて名前の語の先頭に一致するか、綴りの類似度（編集距離から）が 0.75 以上のものを、類似度順に最大 10 件。`Aella` → `Aella, Zephyr's Hand`、`Beguilling Coup` → `Beguiling Coup`、`Fire Ball` → `Fireball`。同名のカード（`Nameless Champion` は 18 枚）もここで slug で見分ける。
-- `get_card` は裁定を必ず同梱する。裁定には ERRATA があり、カードの印刷面や API の列より新しいことがある。Beguiling Coup では `Command` と `Taunt` の扱いが効果テキストには無く、裁定にしか無い。
+- `get_card` は裁定を必ず同梱する。効果テキストを直す ERRATA は効果テキストに当て済みで（「データの誤りの修正」）、何が変わったかの記録として返す。Beguiling Coup では `Command` と `Taunt` の扱いが効果テキストには無く、裁定にしか無い。
 - `get_card` は用語を全部（名前と定義の引用 ID）返す。基本語を省く基準を決めると、それを調整し続けることになる。14 語でも 200 トークン前後。
 - `get_card` は、カード名が出てくる条文（59 枚・86 条、最多 5 条・約 300 トークン）と、他のカードの裁定でカード名が出てくるものを全文で返す。`Divine Comedy` などのマスタリーは効果の説明がルール文書にしか無く、検索の当たり外れに任せない。
 - 参照先カードは名前・slug・種類（SUMMON など）を返す。

@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { buildIndex } from "./build-index";
+import { CORRECTIONS } from "./domain/corrections";
 import { DataError } from "./domain/errors";
 import type { Card } from "./domain/model";
 
@@ -97,17 +98,32 @@ function putValidData(): void {
       .replace(/\.md$/, "");
     put(`rules/${path}`, `# ${id}\n\n#### General Rules\n\n1. Text of ${id}.\n`);
   }
+  const cards = new Map<string, Card>();
   for (const slug of CARD_REFERENCE_SLUGS) {
-    put(
-      `cards/${slug}.json`,
-      `${JSON.stringify(
-        card(slug, [
-          { kind: "MASTERY", name: "Fractured Memories", slug: "crystal-mastery", direction: "TO" },
-        ]),
-      )}\n`,
+    cards.set(
+      slug,
+      card(slug, [
+        { kind: "MASTERY", name: "Fractured Memories", slug: "crystal-mastery", direction: "TO" },
+      ]),
     );
   }
-  put("cards/fractured-memories.json", `${JSON.stringify(card("fractured-memories", null))}\n`);
+  cards.set("fractured-memories", card("fractured-memories", null));
+  // card-text の項目は、from が効果テキストにちょうど 1 か所あるカードに当たる
+  for (const c of CORRECTIONS) {
+    if (c.kind !== "card-text") continue;
+    const target = cards.get(c.cardSlug) ?? { ...card(c.cardSlug, null), effect_raw: "" };
+    cards.set(c.cardSlug, { ...target, effect_raw: `${target.effect_raw}\n${c.from}` });
+  }
+  // ruling-title の項目は、cite ID の日付の裁定を 1 件だけ持つカードに当たる
+  for (const c of CORRECTIONS) {
+    if (c.kind !== "ruling-title") continue;
+    const [slug = "", rest = ""] = c.citeId.split("#ruling:");
+    const date = rest.slice(0, rest.lastIndexOf(":"));
+    const target = cards.get(slug) ?? card(slug, null);
+    const rule = [...(target.rule ?? []), { title: "", date_added: date, description: "Ruling." }];
+    cards.set(slug, { ...target, rule });
+  }
+  for (const [slug, c] of cards) put(`cards/${slug}.json`, `${JSON.stringify(c)}\n`);
 
   put(
     "rules/glossary/game-terms.md",
@@ -175,6 +191,28 @@ describe("buildIndex", () => {
     expect(error).toBeInstanceOf(DataError);
     if (!(error instanceof DataError)) throw error;
     expect(error.message).toContain("general-rules-objectives");
+    expect(existsSync(outPath)).toBe(false);
+  });
+
+  test("効果テキストに当たっていない ERRATA のカードがあると DataError で失敗し、outPath は作られない", async () => {
+    putValidData();
+    put(
+      "cards/new-errata.json",
+      `${JSON.stringify({
+        ...card("new-errata", null),
+        effect_raw: "Allies can attack using this weapon.",
+        rule: [{ title: "ERRATA", date_added: "2026-08-16", description: "attack using -> wield" }],
+      })}\n`,
+    );
+
+    const error = await buildIndex({ dataDir, outPath }).then(
+      () => "resolved",
+      (e: unknown) => e,
+    );
+
+    expect(error).toBeInstanceOf(DataError);
+    if (!(error instanceof DataError)) throw error;
+    expect(error.message).toContain("new-errata#ruling:2026-08-16:1");
     expect(existsSync(outPath)).toBe(false);
   });
 
