@@ -1,3 +1,5 @@
+import { looseKey, TERM_SYNONYMS, termKey } from "../../shared/term-key";
+
 // 本文の代わりに用語名の一覧を返す用語集のページ（get_term で引く）
 export const GLOSSARY_PAGE_IDS: readonly string[] = ["keywords-and-abilities", "game-terms"];
 
@@ -14,13 +16,26 @@ export function glossaryTermNames(terms: TermLike[], pageId: string): string[] {
     .map((t) => t.name);
 }
 
-// 名前か別名に大文字小文字を区別せず一致する用語
-export function findTerm<T extends TermLike>(terms: T[], input: string): T | undefined {
-  const key = input.trim().toLowerCase();
-  if (key === "") return undefined;
-  return terms.find(
-    (t) => t.name.toLowerCase() === key || t.aliases.some((a) => a.toLowerCase() === key),
-  );
+// 2 語以上に当たったら、呼び出し側が候補として示せるよう全部返す
+export function findTerms<T extends TermLike>(terms: T[], input: string): T[] {
+  if (input.trim() === "") return [];
+  const whole = findByKeys(terms, input);
+  if (whole.length > 0 || !input.includes("/")) return whole;
+  return [...new Set(input.split("/").flatMap((part) => findByKeys(terms, part)))];
+}
+
+function findByKeys<T extends TermLike>(terms: T[], input: string): T[] {
+  if (input.trim() === "") return [];
+  const key = termKey(input);
+  const exact = terms.filter((t) => [t.name, ...t.aliases].some((f) => termKey(f) === key));
+  if (exact.length > 0) return exact;
+
+  const loose = looseKey(input);
+  const near = terms.filter((t) => [t.name, ...t.aliases].some((f) => looseKey(f) === loose));
+  if (near.length > 0) return near;
+
+  const target = Object.entries(TERM_SYNONYMS).find(([word]) => looseKey(word) === loose)?.[1];
+  return terms.filter((t) => t.name === target);
 }
 
 // どの用語の定義でもない節（用語集のページの冒頭の一般則など）。一覧だけでは届かないので本文を返す

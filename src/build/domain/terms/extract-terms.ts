@@ -1,19 +1,24 @@
-import type { Page, Term, TermDefinition } from "../model";
+import { TERM_SYNONYMS, termKey } from "../../../shared/term-key";
+import { DataError } from "../errors";
+import type { Page, Section, Term, TermDefinition } from "../model";
 
 const EXCLUDED = new Set(["general rules"]);
+// 条文の箇条書き `- 名前: 説明` が用語の定義になっている節
+const LISTED_TERM_SECTIONS = new Set(["game-terms#Label Keywords"]);
 
 export function extractTerms(pages: Page[]): Term[] {
-  const byName = new Map<string, Term>();
+  const byKey = new Map<string, Term>();
 
   const add = (heading: string, def: TermDefinition) => {
     const [name, ...aliases] = splitHeading(heading);
     if (name === undefined || EXCLUDED.has(name.toLowerCase())) return;
-    let term = byName.get(name.toLowerCase());
+    const key = termKey(name);
+    let term = byKey.get(key);
     if (term === undefined) {
-      term = { termId: byName.size + 1, name, aliases: [], definitions: [] };
-      byName.set(name.toLowerCase(), term);
+      term = { termId: byKey.size + 1, name, aliases: [], definitions: [] };
+      byKey.set(key, term);
     }
-    for (const alias of aliases) {
+    for (const alias of [name, ...aliases]) {
       const lower = alias.toLowerCase();
       if (
         lower !== term.name.toLowerCase() &&
@@ -27,12 +32,16 @@ export function extractTerms(pages: Page[]): Term[] {
     }
   };
 
-  // 語彙にするのは `####` の節だけ。`###`・行頭の太字の節（minor）は規則の小見出しで用語ではなく、
-  // 最初の見出しより前の本文の節（lead）は、下のページ題の定義と同じ語になる
+  // `####` の節の見出しが用語。最初の見出しより前の本文の節（lead）は、下のページ題の定義と同じ語になる。
+  // `###`・行頭の太字の節（minor）は `Deleveling` のような用語だが、末尾が `:` の前置き（`Masteries:`）と
+  // 番号付きの手順（`1.1 Announcing Activation`）は外す
   for (const page of pages) {
     for (const section of page.sections) {
-      if (section.kind !== "heading") continue;
-      add(section.heading, { pageId: page.pageId, sectionId: section.sectionId });
+      if (section.kind === "lead") continue;
+      if (section.kind === "minor" && /:$|^\d+(\.\d+)*\s/.test(section.heading.trim())) continue;
+      const def = { pageId: page.pageId, sectionId: section.sectionId };
+      add(section.heading, def);
+      for (const name of namesInClauses(section)) add(name, def);
     }
   }
   // ページ題の定義はページ全体を指す。get_term は定義をすべて返す
@@ -40,7 +49,42 @@ export function extractTerms(pages: Page[]): Term[] {
     add(page.title.split(" - ").at(-1)!, { pageId: page.pageId, sectionId: null });
   }
 
-  return [...byName.values()];
+  return [...byKey.values()];
+}
+
+// LISTED_TERM_SECTIONS と TERM_SYNONYMS は節 ID と用語名を名指しするので、ルール文書の改訂で
+// 名前が変わると黙って効かなくなる。索引を書く前に止める
+export function assertTermSources(pages: Page[], terms: Term[]): void {
+  const sections = new Map(pages.flatMap((p) => p.sections.map((s) => [s.sectionId, s])));
+  for (const id of LISTED_TERM_SECTIONS) {
+    const section = sections.get(id);
+    if (section === undefined || namesInClauses(section).length === 0) {
+      throw new DataError(id, "用語の箇条書きが見つからない");
+    }
+  }
+  const names = new Set(terms.map((t) => t.name));
+  for (const [word, name] of Object.entries(TERM_SYNONYMS)) {
+    if (!names.has(name)) throw new DataError(`TERM_SYNONYMS.${word}`, `用語 ${name} が無い`);
+  }
+}
+
+// 見出しではなく条文に名前が書かれた用語。
+// - LISTED_TERM_SECTIONS の箇条書き `- Deluge N: ...` の名前
+// - 番号に `.` の無い条文で、句読点を持たず下位の条文を持つもの。機能サブタイプの
+//   `Siegeable`・`Gun / Bow / Aetherwing` のように、条文が小見出しの役をしている。`/` の語は別々の用語
+function namesInClauses(section: Section): string[] {
+  const names: string[] = [];
+  if (LISTED_TERM_SECTIONS.has(section.sectionId)) {
+    for (const c of section.clauses) {
+      for (const m of c.text.matchAll(/^- ([^:\n]+):/gm)) names.push(m[1]!);
+    }
+  }
+  for (const c of section.clauses) {
+    if (c.number === "0" || c.number.includes(".") || /[.:;,]/.test(c.text)) continue;
+    if (!section.clauses.some((sub) => sub.number.startsWith(`${c.number}.`))) continue;
+    names.push(...c.text.split("/"));
+  }
+  return names;
 }
 
 // "Died/Dies and Kills/Killed" → ["Died", "Dies", "Kills", "Killed"]。先頭が名前、残りが別名。
