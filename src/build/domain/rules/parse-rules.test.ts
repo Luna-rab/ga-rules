@@ -257,7 +257,7 @@ describe("parseRules: 節の分け方", () => {
     ]);
   });
 
-  test("節の種類: 行頭の太字だけの行と、条文の無い ### も minor で、その後の #### は heading", () => {
+  test("節の種類: 行頭の太字だけの行は minor、#### は heading。条文の無い ### は節にならない", () => {
     const p = page(
       parse([
         {
@@ -269,7 +269,6 @@ describe("parseRules: 節の分け方", () => {
     );
     expect(p.sections.map((s) => [s.heading, s.kind])).toEqual([
       ["Leveling Up", "minor"],
-      ["Masteries", "minor"],
       ["Next", "heading"],
     ]);
   });
@@ -288,7 +287,7 @@ describe("parseRules: 節の分け方", () => {
         "# M - X\n\n#### General Rules\n\n1. A\n\n### Standard Games\n\n1. B\n\n**Leveling Up**\n\n1. C\n\n**1.1 Announcing Activation**: First, announce.\n\n1. D\n\n**1.4 Selecting Modes:** Pick.\n\n### Masteries:\n\n#### Next\n\n1. E",
     };
 
-    test("7 節に分かれ、見出しは区切りの文字列から末尾の : を落としたもの", () => {
+    test("6 節に分かれ、見出しは区切りの文字列から末尾の : を落としたもの", () => {
       const p = page(parse([mixed]), "x");
       expect(p.sections.map((s) => s.heading)).toEqual([
         "General Rules",
@@ -296,7 +295,6 @@ describe("parseRules: 節の分け方", () => {
         "Leveling Up",
         "1.1 Announcing Activation",
         "1.4 Selecting Modes",
-        "Masteries",
         "Next",
       ]);
     });
@@ -320,26 +318,20 @@ describe("parseRules: 節の分け方", () => {
       expect(clause(pages, "x#1.1 Announcing Activation:1").text).not.toContain("First");
     });
 
-    test("直後に #### が来る ### の節は、条文 0 件で残る", () => {
+    test("直後に #### が来る ### の節は、条文が無いので出さない", () => {
       const p = page(parse([mixed]), "x");
-      const masteries = p.sections.find((s) => s.heading === "Masteries");
-      expect(masteries?.sectionId).toBe("x#Masteries");
-      expect(masteries?.clauses).toEqual([]);
+      expect(p.sections.find((s) => s.heading === "Masteries")).toBeUndefined();
     });
   });
 
-  test("番号の無い段落と箇条書きは、直前の条文の text に続く", () => {
+  test("番号の無い段落と箇条書きは、直前の条文の text に行を分けて続き、箇条書きは「- 」に揃える", () => {
     const pages = parse([
       {
         path: "p.md",
         markdown: "# P - Q\n\n#### General Rules\n\n1. A\n\nSituations:\n\n* x\n* y",
       },
     ]);
-    const c1 = clause(pages, "p#General Rules:1");
-    expect(c1.text).toContain("A");
-    expect(c1.text).toContain("Situations:");
-    expect(c1.text).toContain("* x");
-    expect(c1.text).toContain("* y");
+    expect(clause(pages, "p#General Rules:1").text).toBe("A\nSituations:\n- x\n- y");
     expect(clauses(pages)).toHaveLength(1);
   });
 
@@ -719,7 +711,159 @@ describe("parseRules: hint の後で書き直したリストの続き番号", ()
       },
     ]);
     expect(clauses(pages).map((c) => c.number)).toEqual(["1", "2", "3"]);
-    expect(clause(pages, "p#S:2").text).toContain("* bullet");
+    expect(clause(pages, "p#S:2").text).toContain("- bullet");
     expect(clause(pages, "p#S:3").text).toContain("C");
+  });
+});
+
+// 節 S だけのページ p を作る
+const one = (body: string): Page[] =>
+  parse([{ path: "p.md", markdown: `# P - Q\n\n#### S\n\n${body}\n` }]);
+
+describe("parseRules: GitBook の記法を本文に残さない", () => {
+  test("画像の後ろの行末の `\\` と、`\\` だけの行が残らない（hint は 1 行にまとまる）", () => {
+    const pages = one(
+      '1. A\n\n{% hint style="info" %}\n![](../../.gitbook/assets/serve.jpg)\\\n\\\nE.g., Ciel\'s mastery resolves.\nSecond line.\n{% endhint %}',
+    );
+    expect(clause(pages, "p#S:1").text).toBe("A\n例: Ciel's mastery resolves. Second line.");
+  });
+
+  test("<br> が残らない", () => {
+    const pages = one("1. A<br>\n\n<br>\n\n2. B");
+    expect(clause(pages, "p#S:1").text).toBe("A");
+    expect(clause(pages, "p#S:2").text).toBe("B");
+  });
+
+  test("<br> を挟んだ単語はつながらない", () => {
+    expect(clause(one("1. Draw a card.<br>Then discard."), "p#S:1").text).toBe(
+      "Draw a card. Then discard.",
+    );
+  });
+
+  test("CRLF の行末の `\\` も残らない", () => {
+    const pages = parse([{ path: "p.md", markdown: "# P - Q\r\n\r\n#### S\r\n\r\n1. A\\\r\n" }]);
+    expect(clause(pages, "p#S:1").text).toBe("A");
+  });
+
+  test("強調記号を消してもリンク先は書き換えない", () => {
+    const pages = parse([
+      { path: "a.md", markdown: "# A\n\n#### _Foo_\n\n1. X\n" },
+      {
+        path: "p.md",
+        markdown: "# P - Q\n\n#### S\n\n1. See [**foo**](a.md#_foo_) and [x](https://x.com/_a_).\n",
+      },
+    ]);
+    const c = clause(pages, "p#S:1");
+    expect(c.text).toBe("See [foo](a#_Foo_) and [x](https://x.com/_a_).");
+    expect(c.links).toEqual([{ pageId: "a", sectionId: "a#_Foo_" }]);
+  });
+
+  test("エスケープの `\\` と強調記号が残らない。崩れた強調も消える", () => {
+    const pages = one(
+      '1. Uses \\[Name], \\[Title] and **bolded** text.\n2. The flip sid**e** is "_may"_ and _italic_.',
+    );
+    expect(clause(pages, "p#S:1").text).toBe("Uses [Name], [Title] and bolded text.");
+    expect(clause(pages, "p#S:2").text).toBe('The flip side is "may" and italic.');
+  });
+
+  test("本文が E.g. で始まる hint は「例: E.g., 」にならない", () => {
+    const pages = one('1. A\n\n{% hint style="info" %}\nE.g., Cards like X.\n{% endhint %}');
+    expect(clause(pages, "p#S:1").text).toBe("A\n例: Cards like X.");
+  });
+
+  test("画像と説明文だけの hint は捨てる", () => {
+    const pages = one(
+      '1. A\n\n{% hint style="success" %}\n<img src="x.jpg" alt=""> <img src="y.jpg" alt="">\n\n_The four pages._\n{% endhint %}\n\n2. B',
+    );
+    expect(clause(pages, "p#S:1").text).toBe("A");
+  });
+
+  test("画像の無い斜体 1 行の hint は説明文ではないので残す", () => {
+    const pages = one(
+      '1. A\n\n{% hint style="warning" %}\n_Immortality prevents this._\n{% endhint %}',
+    );
+    expect(clause(pages, "p#S:1").text).toBe("A\n例外: Immortality prevents this.");
+  });
+
+  test("パンくずの段落 General Rules: は条文にならない", () => {
+    const pages = parse([
+      { path: "p.md", markdown: "# P - Ending\n\nGeneral Rules:\n\n1. A game ends.\n" },
+    ]);
+    expect(clauses(pages).map((c) => c.clauseId)).toEqual(["p#Ending:1"]);
+  });
+
+  test("子ページの案内と、続くリンクだけの箇条書きは捨てる", () => {
+    const pages = parse([
+      { path: "a.md", markdown: "# A\n\n#### S\n\n1. X\n" },
+      {
+        path: "p.md",
+        markdown:
+          "# P - Q\n\n#### S\n\n1. Last rule.\n\nThe following pages discuss these topics:\n\n* [A](a.md)\n* [A again](a.md)\n",
+      },
+    ]);
+    expect(clause(pages, "p#S:1").text).toBe("Last rule.");
+  });
+
+  test("リンクの文字列の前後の空白はリンクの外に出る", () => {
+    const pages = parse([
+      { path: "a.md", markdown: "# A\n\n#### Loaded Cards\n\n1. X\n" },
+      {
+        path: "p.md",
+        markdown:
+          "# P - Q\n\n#### S\n\n1. Its [Loaded Cards ](a.md#loaded-cards)zone, summoned by[ gathering](a.md).\n",
+      },
+    ]);
+    expect(clause(pages, "p#S:1").text).toBe(
+      "Its [Loaded Cards](a#Loaded Cards) zone, summoned by [gathering](a).",
+    );
+  });
+
+  test("文字列がファイル名のリンクは、文字列がリンク先のページ題になる", () => {
+    const pages = parse([
+      { path: "glossary/game-terms.md", markdown: "# Game Terms\n\n#### S\n\n1. X\n" },
+      {
+        path: "p.md",
+        markdown:
+          '# P - Q\n\n#### S\n\n1. Treated as [game-terms.md](glossary/game-terms.md "mention") here.\n',
+      },
+    ]);
+    expect(clause(pages, "p#S:1").text).toBe("Treated as [Game Terms](game-terms) here.");
+  });
+});
+
+const removeText = (from: string, path = "p.md"): Correction => ({
+  kind: "rule-text",
+  path,
+  from,
+  to: "",
+  reason: "テスト",
+});
+
+describe("parseRules: rule-text の修正", () => {
+  const raw: RawPage = {
+    path: "p.md",
+    markdown: "# P - Q\n\n#### S\n\n1. Shown as below, as shown below.\n",
+  };
+
+  test("from を to に置き換える", () => {
+    expect(clause(parse([raw], [removeText(", as shown below")]), "p#S:1").text).toBe(
+      "Shown as below.",
+    );
+  });
+
+  test("from が無ければ、その from を添えて DataError", () => {
+    expect(thrown(() => parse([raw], [removeText("no such text")])).message).toContain(
+      "no such text",
+    );
+  });
+
+  test("from が 2 か所にあれば DataError", () => {
+    expect(thrown(() => parse([raw], [removeText("below")])).message).toContain("2 か所");
+  });
+
+  test("path のページが無ければ DataError", () => {
+    expect(thrown(() => parse([raw], [removeText(", as shown below", "q.md")])).message).toContain(
+      "q.md",
+    );
   });
 });
