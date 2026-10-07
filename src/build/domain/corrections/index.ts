@@ -3,7 +3,8 @@ import type { Card, LinkTarget } from "../model";
 
 export type Correction =
   | { kind: "card-reference"; cardSlug: string; from: string; to: string; reason: string } // references[].slug を直す
-  | { kind: "rule-link"; path: string; from: string; to: LinkTarget | null; reason: string }; // path は RawPage.path、from はリンクの括弧内そのまま。null はリンクを外して文字だけ残す
+  | { kind: "rule-link"; path: string; from: string; to: LinkTarget | null; reason: string } // path は RawPage.path、from はリンクの括弧内そのまま。null はリンクを外して文字だけ残す
+  | { kind: "rule-text"; path: string; from: string; to: string; reason: string }; // 原文の from（ページに 1 か所だけ）を to に置き換える。一般の規則で直せない文の崩れに使う
 
 const CRYSTAL_MASTERY_REASON =
   "API に crystal-mastery のカードは無く（404）、参照の name は Fractured Memories";
@@ -42,12 +43,20 @@ export const CORRECTIONS: readonly Correction[] = [
       "リンク先の見出しが「Type-Overwriting and Type-setting」に改名され、アンカーが古いまま。改名後の節を指す",
   },
   {
-    kind: "rule-link",
+    kind: "rule-text",
     path: "game-mechanics/game-mechanics-types-of-effects/types-of-effects-continuous-effects/README.md",
-    from: "../../../glossary/game-terms.md#have-gain-get-become-are",
-    to: null,
+    from: " See [here](../../../glossary/game-terms.md#have-gain-get-become-are).",
+    to: "",
     reason:
-      "リンク先の節が無いので外す（game-terms.md に have・gain・get・become・are の見出しが無い）",
+      "リンク先の節が無い（game-terms.md に have・gain・get・become・are の見出しが無い）。リンクを外すと「See here.」だけが残るので文ごと消す",
+  },
+  {
+    kind: "rule-text",
+    path: "game-mechanics/game-mechanics-mastery.md",
+    from: ", as shown below",
+    to: "",
+    reason:
+      "下にあった 4 ページの図は画像なので取り込みで消える。図を指す言葉だけが残らないようにする",
   },
   {
     kind: "rule-link",

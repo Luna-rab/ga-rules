@@ -118,6 +118,34 @@ describe("search_rules: 条文と裁定の見出し", () => {
   });
 });
 
+function lineOf(query: string, clauseId: string): string {
+  const line = call(query)
+    .text.split("\n")
+    .find((l) => l.startsWith(`- [${clauseId}]`));
+  if (!line) throw new Error(`${query} の結果に ${clauseId} が無い`);
+  return line;
+}
+
+describe("search_rules: 条文の hint", () => {
+  test("「例: 」の hint は 1 行表示から外れる", () => {
+    // naming#General Rules:6 には「例: A Tome of Sacred Lightning ...」の hint が付いている
+    const line = lineOf("Tome of Sacred Lightning", "naming#General Rules:6");
+    expect(line).toContain("dynamically changed");
+    expect(line).not.toContain("例: ");
+    expect(line).not.toContain("Banish Tome");
+  });
+
+  test("「例外: 」の hint は「 / 例外: 」で区切って残る", () => {
+    const line = lineOf(
+      "Opportunity Recollection phase",
+      "turn-order-materialize-phase#General Rules:5",
+    );
+    expect(line).toContain(
+      "Recollection phase. / 例外: Players are not naturally given Opportunity",
+    );
+  });
+});
+
 describe("search_rules: 検索語", () => {
   test("FTS5 の構文になる語を含んでも例外を投げず、isError も付かない", () => {
     for (const q of [

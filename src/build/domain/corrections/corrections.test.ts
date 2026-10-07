@@ -152,11 +152,6 @@ describe("CORRECTIONS", () => {
     },
     {
       path: "game-mechanics/game-mechanics-types-of-effects/types-of-effects-continuous-effects/README.md",
-      from: "../../../glossary/game-terms.md#have-gain-get-become-are",
-      to: null,
-    },
-    {
-      path: "game-mechanics/game-mechanics-types-of-effects/types-of-effects-continuous-effects/README.md",
       from: "/broken/pages/d5fQPRV40fjs6PztDRCI",
       to: {
         pageId: "general-rules-card-characteristics",

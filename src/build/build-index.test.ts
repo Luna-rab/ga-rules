@@ -81,6 +81,7 @@ const SUMMARY = `# Table of contents
   * [Game Mechanics - Damage](game-mechanics/game-mechanics-damage.md)
     * [Types of Effects - Continuous Effects](game-mechanics/game-mechanics-types-of-effects/types-of-effects-continuous-effects/README.md)
 * [Game Terms](glossary/game-terms.md)
+* [Game Mechanics - Mastery](game-mechanics/game-mechanics-mastery.md)
 `;
 
 const DAMAGE_PAGE = "rules/game-mechanics/game-mechanics-damage.md";
@@ -122,7 +123,11 @@ function putValidData(): void {
   );
   put(
     "rules/game-mechanics/game-mechanics-types-of-effects/types-of-effects-continuous-effects/README.md",
-    "# Types of Effects - Continuous Effects\n\n#### General Rules\n\n1. Objects can [gain](../../../glossary/game-terms.md#have-gain-get-become-are) abilities.\n2. Effects change [characteristics](/broken/pages/d5fQPRV40fjs6PztDRCI).\n",
+    "# Types of Effects - Continuous Effects\n\n#### General Rules\n\n1. Objects can gain abilities. See [here](../../../glossary/game-terms.md#have-gain-get-become-are).\n2. Effects change [characteristics](/broken/pages/d5fQPRV40fjs6PztDRCI).\n",
+  );
+  put(
+    "rules/game-mechanics/game-mechanics-mastery.md",
+    "# Game Mechanics - Mastery\n\n#### General Rules\n\n1. Each page is a mastery, as shown below.\n",
   );
   put(DAMAGE_PAGE, DAMAGE_HEAD);
 }
@@ -237,6 +242,7 @@ describe("buildIndex: 書いた index.sqlite の形", () => {
         position: 8,
       },
       { page_id: "game-terms", parent_page_id: null, position: 9 },
+      { page_id: "game-mechanics-mastery", parent_page_id: null, position: 10 },
     ]);
   });
 
