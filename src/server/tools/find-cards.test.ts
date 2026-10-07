@@ -15,6 +15,12 @@ const hasSlug = (line: string, slug: string) =>
 const hasNumber = (text: string, n: number) => new RegExp(`(^|[^0-9])${n}($|[^0-9])`).test(text);
 
 describe("find_cards", () => {
+  test("Seiryuu は両面カードの裏面 Seiryuu, Azure Dragon を、表の slug を添えて返す", () => {
+    const line = linesOf(run("Seiryuu").text).find((l) => hasSlug(l, "seiryuu-azure-dragon"));
+    expect(line).toContain("Seiryuu, Azure Dragon");
+    expect(line).toContain("back face of fabled-azurite-fatestone");
+  });
+
   test("Aella は Aella, Zephyr's Hand を名前と slug 付きで返す", () => {
     const out = run("Aella");
     expect(out.isError).toBeFalsy();

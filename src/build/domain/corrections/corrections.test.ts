@@ -26,6 +26,7 @@ function card(slug: string, references: CardReference[] | null): Card {
     rule: null,
     references,
     legality: null,
+    back: null,
   };
 }
 
@@ -136,6 +137,16 @@ describe("applyCardCorrections: card-text", () => {
     const input = withEffect("uses this weapon");
     applyCardCorrections(input, [wield("uses this weapon")]);
     expect(input[0]?.effect_raw).toBe("uses this weapon");
+  });
+
+  test("cardSlug が裏面の slug なら、裏面の効果テキストを書き換え、表は変えない", () => {
+    const [front] = withEffect("uses this weapon");
+    if (!front) throw new Error("no card");
+    const { rule: _r, references: _ref, legality: _l, back: _b, ...face } = front;
+    const input: Card[] = [{ ...front, back: { ...face, slug: "hammer-back" } }];
+    const [out] = applyCardCorrections(input, [wield("uses this weapon", "hammer-back")]);
+    expect(out?.back?.effect_raw).toBe("wields this weapon");
+    expect(out?.effect_raw).toBe("uses this weapon");
   });
 
   test("カードが無い項目は slug を添えて DataError", () => {

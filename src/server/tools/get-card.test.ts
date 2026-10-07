@@ -1,6 +1,10 @@
+import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
+import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { z } from "zod";
-import type { ToolContext } from "../context";
+import { openContext, type ToolContext } from "../context";
 import { openTestContext } from "../testing";
 import { getCard } from "./get-card";
 
@@ -30,6 +34,54 @@ const StoredRow = z.object({
   durability: z.number().nullable(),
   speed: z.number().nullable(),
   legality: z.string().nullable(),
+});
+
+describe("get_card: 両面カード", () => {
+  test("表の slug では、裏面の名前・種別・ステータス・効果テキストも返す", () => {
+    const out = run(["fabled-azurite-fatestone"]);
+    expect(out.text).toContain("### Back face: Seiryuu, Azure Dragon (seiryuu-azure-dragon)");
+    expect(out.text).toContain("- Types: ALLY");
+    expect(out.text).toContain("cost reserve 10, power 4, life 12");
+    expect(out.text).toContain("Empower X+2");
+  });
+
+  test("裏面の slug では、表の名前と slug、表に付いた裁定・参照先・禁止を返す", () => {
+    const out = run(["seiryuu-azure-dragon"]);
+    expect(out.isError).toBeFalsy();
+    expect(out.text).toContain(
+      "- Back face of: Fabled Azurite Fatestone (fabled-azurite-fatestone)",
+    );
+    expect(out.text).toContain("[fabled-azurite-fatestone#ruling:2025-03-02:3]");
+    expect(out.text).toContain("- Arcane Blast (arcane-blast) — GENERATE");
+    expect(out.text).toContain("STANDARD limit 0");
+  });
+
+  test("表の裁定が裏面の名前に触れていても、ほかのカードの裁定として重ねて出さない", () => {
+    // 実データに裏面の名前に触れる表の裁定が無いので、索引の写しに結び付けを 1 行足して確かめる
+    const dir = mkdtempSync(join(tmpdir(), "get-card-"));
+    const copy = join(dir, "index.sqlite");
+    copyFileSync(ctx.db.filename, copy);
+    try {
+      const db = new Database(copy);
+      db.run(
+        `INSERT INTO ruling_card (ruling_id, card_slug)
+         SELECT ruling_id, 'seiryuu-azure-dragon' FROM card_ruling WHERE cite_id = ?`,
+        ["fabled-azurite-fatestone#ruling:2025-03-02:3"],
+      );
+      db.close();
+      const out = getCard.handler(openContext(copy), { slugs: ["seiryuu-azure-dragon"] });
+      expect(out.text.split("[fabled-azurite-fatestone#ruling:2025-03-02:3]")).toHaveLength(2);
+      expect(out.text).not.toContain("Rulings on other cards");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("表の ERRATA は裏面の効果テキストにも当たっている（Huaji of Abyssal Fall）", () => {
+    const out = run(["huaji-of-abyssal-fall"]);
+    expect(out.text).toContain("can wield this weapon");
+    expect(out.text).not.toContain("can attack using this weapon");
+  });
 });
 
 describe("get_card", () => {

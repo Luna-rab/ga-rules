@@ -46,6 +46,7 @@ function card(slug: string, references: Card["references"]): Card {
     rule: null,
     references,
     legality: null,
+    back: null,
   };
 }
 
@@ -235,6 +236,65 @@ async function build(): Promise<Database> {
   await buildIndex({ dataDir, outPath });
   return new Database(outPath, { readonly: true });
 }
+
+describe("buildIndex: 両面カード", () => {
+  test("裏面が自分の slug の行になり、front_slug で表を指し、表の禁止を持つ", async () => {
+    putValidData();
+    const { rule: _r, references: _ref, legality: _l, back: _b, ...face } = card("x", null);
+    put(
+      "cards/front-face.json",
+      `${JSON.stringify({
+        ...card("front-face", null),
+        legality: { STANDARD: { limit: 0 } },
+        back: { ...face, slug: "back-face", name: "Back Face", types: ["ALLY"], power: 4 },
+      })}\n`,
+    );
+    await buildIndex({ dataDir, outPath });
+    const db = new Database(outPath, { readonly: true });
+
+    const rows = db
+      .query("SELECT slug, front_slug, types, power, legality FROM card WHERE slug LIKE '%-face'")
+      .all();
+    expect(rows.toSorted((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))).toEqual([
+      {
+        slug: "back-face",
+        front_slug: "front-face",
+        types: '["ALLY"]',
+        power: 4,
+        legality: '{"STANDARD":{"limit":0}}',
+      },
+      {
+        slug: "front-face",
+        front_slug: null,
+        types: '["ACTION"]',
+        power: null,
+        legality: '{"STANDARD":{"limit":0}}',
+      },
+    ]);
+    db.close();
+  });
+
+  test("裏面の効果テキストに表の ERRATA が当たっていなければ DataError", async () => {
+    putValidData();
+    const { rule: _r, references: _ref, legality: _l, back: _b, ...face } = card("x", null);
+    put(
+      "cards/front-face.json",
+      `${JSON.stringify({
+        ...card("front-face", null),
+        rule: [{ title: "ERRATA", date_added: "2026-08-16", description: "attack using -> wield" }],
+        back: { ...face, slug: "back-face", effect_raw: "Allies can attack using this weapon." },
+      })}\n`,
+    );
+
+    const error = await buildIndex({ dataDir, outPath }).then(
+      () => "resolved",
+      (e: unknown) => e,
+    );
+
+    expect(error).toBeInstanceOf(DataError);
+    expect(String(error)).toContain("front-face#ruling:2026-08-16:1");
+  });
+});
 
 describe("buildIndex: 書いた index.sqlite の形", () => {
   test("rule_page に body 列が無く、parent_page_id と position がある", async () => {

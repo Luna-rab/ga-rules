@@ -111,17 +111,29 @@ export function applyCardCorrections(cards: Card[], corrections: readonly Correc
   return out;
 }
 
-// from は効果テキストにちょうど 1 回現れなければならない
+// from は効果テキストにちょうど 1 回現れなければならない。cardSlug が裏面の slug なら裏面を書き換える
 function applyCardText(cards: Card[], fix: Extract<Correction, { kind: "card-text" }>): void {
   const where = `correction card-text ${fix.cardSlug}`;
+  const replace = (effect: string | null): string => {
+    const text = effect ?? "";
+    const count = text.split(fix.from).length - 1;
+    if (count !== 1)
+      throw new DataError(where, `文 ${fix.from} が ${count} か所にある（1 か所のはず）`);
+    return text.replace(fix.from, () => fix.to);
+  };
   const i = cards.findIndex((c) => c.slug === fix.cardSlug);
-  const target = cards[i];
-  if (!target) throw new DataError(where, `カード ${fix.cardSlug} が無い`);
-  const effect = target.effect_raw ?? "";
-  const count = effect.split(fix.from).length - 1;
-  if (count !== 1)
-    throw new DataError(where, `文 ${fix.from} が ${count} か所にある（1 か所のはず）`);
-  cards[i] = { ...target, effect_raw: effect.replace(fix.from, () => fix.to) };
+  const front = cards[i];
+  if (front) {
+    cards[i] = { ...front, effect_raw: replace(front.effect_raw) };
+    return;
+  }
+  const j = cards.findIndex((c) => c.back?.slug === fix.cardSlug);
+  const withBack = cards[j];
+  if (!withBack?.back) throw new DataError(where, `カード ${fix.cardSlug} が無い`);
+  cards[j] = {
+    ...withBack,
+    back: { ...withBack.back, effect_raw: replace(withBack.back.effect_raw) },
+  };
 }
 
 // ruling-title の項目を当てる。cite ID の裁定が無い項目は名指しして DataError

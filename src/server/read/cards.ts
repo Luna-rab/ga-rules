@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { and, asc, count, eq, gte, inArray, lte, ne, type SQL, sql } from "drizzle-orm";
+import { and, asc, count, eq, gte, inArray, isNull, lte, ne, type SQL, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { z } from "zod";
 import {
@@ -45,6 +45,7 @@ function toSummary(r: CardRow): CardSummary {
     durability: r.durability,
     speed: r.speed,
     effectRaw: r.effectRaw,
+    frontSlug: r.frontSlug,
   };
 }
 
@@ -90,6 +91,8 @@ function conditions(q: CardQuery): SQL[] {
   }
   if (q.costType !== null) where.push(sql`json_extract(${card.cost}, '$.type') = ${q.costType}`);
   if (q.speed !== null) where.push(eq(card.speed, q.speed));
+  // デッキに入れるかを問う条件なので、デッキに入らない両面カードの裏面は外す。
+  if (q.legalIn !== null || q.bannedIn !== null) where.push(isNull(card.frontSlug));
   if (q.legalIn !== null) where.push(sql`COALESCE(${formatLimit(q.legalIn)}, 1) <> 0`);
   if (q.bannedIn !== null) where.push(sql`${formatLimit(q.bannedIn)} = 0`);
   for (const r of q.ranges) {
@@ -176,16 +179,28 @@ const toRuling = (r: typeof cardRuling.$inferSelect) => ({
 });
 
 // 保存した列・裁定全件・用語・参照先・カード名が出る条文と他カードの裁定を読む。
+// 裁定と参照先は表のカードに付いているので、裏面でも表の slug で引く。
 export function readCardDetail(db: Database, slug: string): CardDetail | null {
   const d = drizzle(db);
   const row = d.select().from(card).where(eq(card.slug, slug)).get();
   if (!row) return null;
+  const physicalSlug = row.frontSlug ?? slug;
   const legality = row.legality === null ? null : Legality.parse(JSON.parse(row.legality));
+
+  const backRow = d.select().from(card).where(eq(card.frontSlug, slug)).get();
+  const frontFace =
+    row.frontSlug === null
+      ? null
+      : (d
+          .select({ slug: card.slug, name: card.name })
+          .from(card)
+          .where(eq(card.slug, row.frontSlug))
+          .get() ?? null);
 
   const rulings = d
     .select()
     .from(cardRuling)
-    .where(eq(cardRuling.cardSlug, slug))
+    .where(eq(cardRuling.cardSlug, physicalSlug))
     .orderBy(asc(cardRuling.rulingId))
     .all()
     .map(toRuling);
@@ -215,7 +230,7 @@ export function readCardDetail(db: Database, slug: string): CardDetail | null {
     .select({ slug: card.slug, name: card.name, kind: cardReference.kind })
     .from(cardReference)
     .innerJoin(card, eq(card.slug, cardReference.toSlug))
-    .where(eq(cardReference.fromSlug, slug))
+    .where(eq(cardReference.fromSlug, physicalSlug))
     .orderBy(asc(card.name), asc(card.slug), asc(cardReference.kind))
     .all();
 
@@ -233,7 +248,7 @@ export function readCardDetail(db: Database, slug: string): CardDetail | null {
     .select({ ruling: cardRuling })
     .from(rulingCard)
     .innerJoin(cardRuling, eq(cardRuling.rulingId, rulingCard.rulingId))
-    .where(and(eq(rulingCard.cardSlug, slug), ne(cardRuling.cardSlug, slug)))
+    .where(and(eq(rulingCard.cardSlug, slug), ne(cardRuling.cardSlug, physicalSlug)))
     .orderBy(asc(cardRuling.cardSlug), asc(cardRuling.rulingId))
     .all()
     .map((r) => toRuling(r.ruling));
@@ -243,6 +258,8 @@ export function readCardDetail(db: Database, slug: string): CardDetail | null {
     legality:
       legality &&
       Object.fromEntries(Object.entries(legality).map(([f, v]) => [f, v.limit ?? null])),
+    backFace: backRow ? toSummary(backRow) : null,
+    frontFace,
     rulings,
     terms,
     references,

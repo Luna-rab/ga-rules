@@ -21,6 +21,7 @@ function card(slug: string, effect: string): Card {
     rule: null,
     references: null,
     legality: null,
+    back: null,
   };
 }
 
@@ -89,6 +90,23 @@ describe("findPendingErrata", () => {
     },
   ])("$name の違いを無視して比べる", ({ effect, description }) => {
     expect(pending(effect, description)).toHaveLength(1);
+  });
+
+  test("両面カードは裏面の効果テキストも確かめる", () => {
+    const { rule: _r, references: _ref, legality: _l, back: _b, ...face } = card("c", "");
+    const front = card("c", "Allies can wield this weapon.");
+    const out = findPendingErrata(
+      [{ ...front, back: { ...face, slug: "c-back", effect_raw: "attack using this weapon" } }],
+      [ruling("c", "attack using -> wield")],
+    );
+    expect(out.map((p) => p.ruling.citeId)).toEqual(["c#ruling:2026-08-16:1"]);
+  });
+
+  test.each([
+    { effect: "Genbu gets +X LIFE.", expected: 0 },
+    { effect: "Genbu gets +X life.", expected: 1 },
+  ])("♥ は LIFE と読む（$effect）", ({ effect, expected }) => {
+    expect(pending(effect, '"+X life" -> "+X♥"')).toHaveLength(expected);
   });
 
   test("題が ERRATA で始まらない裁定は見ない", () => {

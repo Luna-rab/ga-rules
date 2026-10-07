@@ -42,6 +42,7 @@ const merlin: Card = {
     { kind: "RELEASE", name: "Fractured Memories", slug: "fractured-memories", direction: "TO" },
   ],
   legality: { STANDARD: { limit: 1 } },
+  back: null,
 };
 
 const memories: Card = {
@@ -61,6 +62,7 @@ const memories: Card = {
   rule: null,
   references: null,
   legality: null,
+  back: null,
 };
 
 function data(relations: Partial<Relations> = {}): IndexData {

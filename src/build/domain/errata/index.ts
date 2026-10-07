@@ -13,9 +13,13 @@ export function parseErrata(description: string): Errata | null {
 }
 
 // ERRATA の文面は効果テキストと書き方が揃っていない（’ と '、pay 2 と pay (2)、power と POWER、
-// 前後の引用符や「..」）。比べる前に両方をこの形にそろえる
+// 前後の引用符や「..」、♥ と LIFE）。比べる前に両方をこの形にそろえる。
+// 効果テキストはアイコンを POWER・LIFE と書くが、ERRATA には ♥ が 1 件ある（+X life -> +X♥）
 export function normalize(s: string, opts: { keepCase?: boolean } = {}): string {
-  const quotes = s.replace(/[‘’]/g, "'").replace(/[“”]/g, '"');
+  const quotes = s
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replaceAll("♥", "LIFE");
   return (opts.keepCase ? quotes : quotes.toLowerCase())
     .replace(/\((\d+|x)\)/gi, "$1")
     .replace(/\s+/g, "");
@@ -41,13 +45,16 @@ export function findPendingErrata(
   cards: Card[],
   rulings: Ruling[],
 ): { ruling: Ruling; errata: Errata }[] {
-  const effects = new Map(cards.map((c) => [c.slug, c.effect_raw ?? ""]));
+  // 裁定は表のカードに付くが、両面カードでは裏面の文を直すもの・両面に当てはまるものがある。両面とも確かめる
+  const effects = new Map(
+    cards.map((c) => [c.slug, [c.effect_raw ?? "", ...(c.back ? [c.back.effect_raw ?? ""] : [])]]),
+  );
   const pending: { ruling: Ruling; errata: Errata }[] = [];
   for (const ruling of rulings) {
     if (!ruling.title.startsWith("ERRATA")) continue;
     // 矢印の無い ERRATA（直した後の文全体、Type の追加など）は、どこを直すかが決まらないので確かめない
     const errata = parseErrata(ruling.description);
-    if (errata && isPending(effects.get(ruling.cardSlug) ?? "", errata)) {
+    if (errata && (effects.get(ruling.cardSlug) ?? []).some((e) => isPending(e, errata))) {
       pending.push({ ruling, errata });
     }
   }
