@@ -107,6 +107,7 @@ src/build/
     errata/               効果テキストに当たっていない ERRATA の検出
     rules/                ページ・節・条文への分解、リンクの解決と書き換え
     terms/                用語・別名・定義の場所の抽出、照合器
+    faces.ts              両面カードの裏面を card の行に並べる
     relate.ts             条文・カード・裁定と、用語・カード名を結ぶ
   infra/                  外とのやりとりだけ
     fetch/                GitHub と api.gatcg.com からの取得（bun run fetch:data）
@@ -268,7 +269,7 @@ flowchart LR
 - 1 ページに約 2.5 秒かかる。順に呼ぶと 1 分 40 秒、5 本ずつ並べると 40 秒。10 本並べても 1 本あたりが遅くなるだけなので、取得先の負担を考えて 5 本にする。
 - 連結した件数が応答の `total_cards` と一致しなければ失敗させる。ページの取りこぼしは HTTP のエラーにならない。
 - 既定の User-Agent では 403 が返る（Python の `urllib` で確認）。User-Agent を明示する。
-- 保存する列: `slug`, `name`, `types`, `subtypes`, `classes`, `elements`, `cost`, `level`, `power`, `life`, `durability`, `speed`, `effect_raw`, `rule`, `references`, `legality`。API の応答は 1 枚約 12KB あるが、残すのは 1 枚 1KB 未満。
+- 保存する列: `slug`, `name`, `types`, `subtypes`, `classes`, `elements`, `cost`, `level`, `power`, `life`, `durability`, `speed`, `effect_raw`, `rule`, `references`, `legality`, `back`。API の応答は 1 枚約 12KB あるが、残すのは 1 枚 1KB 未満。
   - 元素は `elements` だけを残す。`element` は 1 つしか持たず、84 枚で `elements` と食い違う。
     - Exalted のカード 80 枚: `element` は `EXALTED` だけで、`elements` は `["EXALTED", "FIRE"]` など。Exalted のカードは他の元素も併せ持ち、プレイには両方が要る（`game-mechanics-special-elements.md` の Exalted 2・3）。`element` を渡すと Fire などの条件が抜けて誤答する。
     - マスタリー 4 枚: `element` は `NORM` で、`elements` は `[]`。マスタリーはプレイしない（`game-mechanics-mastery.md` の 3）ので、元素なしで正しい。
@@ -276,6 +277,7 @@ flowchart LR
   - `legality` はフォーマット（STANDARD / PANTHEON / DRAFT）ごとの禁止で、149 枚にある。学習データの古い禁止リストで答えさせないために残す。
 - 捨てる列
   - `editions` / `result_editions`: 印刷ごとの情報（セット・レアリティ・画像・foil）で、応答の 9 割以上を占める。印刷面の効果テキストは 209 枚で上の `effect_raw` と違う（古い印刷や注釈文の省略。71 枚は ERRATA の裁定あり）。答えの根拠は `effect_raw` と裁定にする。
+    - 両面カードの裏面だけは `editions[].other_orientations[]` から `back` として残す（`slug` から `effect_raw` までの列）。裏面は版ごとに繰り返し載り、中身が版で食い違えばどれを正とするか決められないので取得を止める。
   - `effect` / `effect_html`: `effect_raw` と同じ内容の Markdown 版（カード名が `CARDNAME`）と HTML 版。太字は用語の抽出に使わない。
   - `element`: 上記のとおり `elements` で足り、Exalted のカードで条件が落ちる。
   - `referenced_by`: `references` の逆向き。索引では結合で引ける。`references` にあって `referenced_by` に無い組が 5 件あるので、`references` を正とする。
@@ -325,6 +327,8 @@ flowchart LR
   - ビルドは、ERRATA の左側（直す前）が効果テキストに残り右側（直した後）が無いカードを探し、あればビルドを止める。取得し直して増えた ERRATA に気付くため。比べる前に引用符・大文字小文字・空白・`(2)` の括弧をそろえる。
     - 語を消す ERRATA（`sacrifice another ally you control. -> sacrifice another ally.`）は、当てたあとも右側が左側の中に見つかるので、左側が残っているかだけで決める。
     - 大文字小文字だけを変える ERRATA（`Token -> token`）は、大文字小文字を区別して比べる。
+    - 両面カードは裏面の効果テキストも確かめる。裁定は表に付くが、裏面の文を直すもの（`fabled-sapphire-fatestone` の `+X life -> +X♥`）や両面に同じ文があるもの（`huaji-of-heavens-rise` の `can attack using -> wield`。裏面の slug `huaji-of-abyssal-fall` に `card-text` を置く）がある。
+    - `♥` は `LIFE` と読む。効果テキストはアイコンを `POWER`・`LIFE` と書く。
     - 矢印の無い ERRATA（直した後の文全体を書いたもの、`Added 'Specter' subtype.` など）は、どこを直すかが決まらないので確かめない。2026-10 時点の 10 件は、効果テキストか API の列に当たっていることを人が確かめた。
   - 題が空の `archon-broadsword#ruling:2026-08-16:1` は、`ruling-title` で題を `ERRATA` に直す。題が空で矢印のある裁定をすべて ERRATA にする規則は採らない。普通の裁定が矢印を含むと、検索から消える。
   - Type・cost・speed を直す ERRATA は API の列に反映済みなので扱わない。
@@ -397,6 +401,7 @@ erDiagram
     card {
         text slug PK
         text name "ほかは「カードの取り込み」の列"
+        text front_slug FK "両面カードの裏面なら表の slug。ほかは NULL"
     }
     card_ruling {
         int ruling_id PK
@@ -418,6 +423,12 @@ erDiagram
 - 裁定はカード名を知らなくても見つかるようにする。上の omen の裁定は、効果テキストにもルール文書にも無く、裁定の中にしか無い。
 - 配列の列（`types`・`classes`・`elements` など）と `cost`・`legality` は JSON の文字列で `card` に持つ。名前の一覧で、それ自体に何かを結ぶことが無い。
 - 外部キーの制約を付ける。参照先が無い行は「データの誤りの修正」で直すか、ビルドを止める。
+- 両面カードの裏面（22 枚）は、自分の slug で `card` の 1 行にし、`front_slug` で表を指す。`search_cards` の種別・ステータスの条件と全文検索、`find_cards` の名前の照合が裏面にもそのまま当たる。「Seiryuu のパワーは？」に答えるため。
+  - 裏面にしか無いサブタイプがある（`SHENJU` など 6 つ）。
+  - 裏面の行には表の `legality` を写す。API の裏面に禁止の列は無く、空のままだと表が禁止のカード（`fabled-azurite-fatestone`）の裏面だけが合法に見える。
+  - `search_cards` の `legal_in`・`banned_in` は裏面を外す。デッキに入れるかを問う条件で、裏面はデッキに入らない。
+  - 裁定と参照先は表の slug に付けたままにする。`get_card` は裏面の slug でも表の裁定と参照先を返す。
+  - 採らなかった方法: 裏面を別テーブルに置き、表のカードに付属させる。デッキに入るカードだけが行になるが、種別・ステータスの条件を裏面に当てるには検索の SQL を 2 つのテーブルにまたがらせることになる。
 
 `rule_clause`・`card`・`card_ruling` に FTS5 の仮想テーブルを並べる。トークナイザは既定の `unicode61` に porter stemmer を足す。本文が英語なので日本語のトークナイザは要らない。`search_rules` が条文単位で返すので、全文検索も条文単位にする。
 

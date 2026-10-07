@@ -17,11 +17,15 @@ export type CardSummary = {
   durability: number | null;
   speed: boolean | null;
   effectRaw: string | null;
+  frontSlug: string | null;
 };
 
 export type CardDetail = CardSummary & {
   // formats 名 → limit（0 なら禁止）
   legality: Record<string, number | null> | null;
+  backFace: CardSummary | null;
+  frontFace: { slug: string; name: string } | null;
+  // 裏面でも表のカードの裁定
   rulings: RulingNode[];
   // definitionIds は用語の定義の引用 ID（節 ID、ページ全体ならページ ID）
   terms: { name: string; definitionIds: string[] }[];
@@ -55,6 +59,7 @@ export function renderCardLine(c: CardSummary, detail?: string): string {
     c.classes.join("/"),
     c.elements.join("/"),
     ...stats(c),
+    c.frontSlug === null ? "" : `back face of ${c.frontSlug}`,
   ].filter((p) => p !== "");
   const effect = c.effectRaw ? oneLine(c.effectRaw) : "";
   const tail = detail ?? (effect.length > 100 ? `${effect.slice(0, 100)}…` : effect);
@@ -65,6 +70,16 @@ function field(label: string, values: string[]): string[] {
   return values.length > 0 ? [`- ${label}: ${values.join(", ")}`] : [];
 }
 
+function faceFields(c: CardSummary): string[] {
+  return [
+    ...field("Types", c.types),
+    ...field("Subtypes", c.subtypes),
+    ...field("Classes", c.classes),
+    ...field("Elements", c.elements),
+    ...field("Stats", stats(c)),
+  ];
+}
+
 function section(heading: string, lines: string[]): string[] {
   return lines.length > 0 ? ["", `### ${heading}`, ...lines] : [];
 }
@@ -73,16 +88,25 @@ export function renderCardDetail(c: CardDetail): string {
   const legality = c.legality
     ? Object.entries(c.legality).map(([f, limit]) => `${f} limit ${limit ?? "none"}`)
     : [];
+  const front = c.frontFace;
   return [
     `## ${c.name} (${c.slug})`,
-    ...field("Types", c.types),
-    ...field("Subtypes", c.subtypes),
-    ...field("Classes", c.classes),
-    ...field("Elements", c.elements),
-    ...field("Stats", stats(c)),
+    ...(front ? [`- Back face of: ${front.name} (${front.slug})`] : []),
+    ...faceFields(c),
     ...field("Legality", legality),
     ...(c.effectRaw ? ["", "### Effect", c.effectRaw] : []),
-    ...section("Rulings", c.rulings.map(renderRuling)),
+    ...(c.backFace
+      ? [
+          "",
+          `### Back face: ${c.backFace.name} (${c.backFace.slug})`,
+          ...faceFields(c.backFace),
+          ...(c.backFace.effectRaw ? ["- Effect:", c.backFace.effectRaw] : []),
+        ]
+      : []),
+    ...section(
+      front ? `Rulings (filed under the front, ${front.slug})` : "Rulings",
+      c.rulings.map(renderRuling),
+    ),
     ...section(
       "Terms",
       c.terms.map((t) => `- ${t.name}: ${t.definitionIds.map((id) => `[${id}]`).join(" ")}`),

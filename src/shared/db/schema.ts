@@ -91,7 +91,9 @@ export const card = sqliteTable("card", {
   durability: integer("durability"),
   speed: integer("speed", { mode: "boolean" }),
   effectRaw: text("effect_raw"),
+  // 裏面の行は表の値を写す。API の裏面に禁止の列が無く、空のままだと禁止の表の裏面が合法に見える
   legality: text("legality"),
+  frontSlug: text("front_slug").references((): AnySQLiteColumn => card.slug),
 });
 
 export const cardRuling = sqliteTable("card_ruling", {

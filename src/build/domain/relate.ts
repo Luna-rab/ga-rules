@@ -1,5 +1,6 @@
 import { formatRulingCiteId } from "../../shared/cite";
 import { DataError } from "./errors";
+import { toCardRows } from "./faces";
 import type { Card, Page, Ruling, Term } from "./model";
 import { Matcher } from "./terms";
 
@@ -42,9 +43,11 @@ export function relate(input: {
   const termMatcher = new Matcher(
     input.terms.map((t) => ({ key: t.termId, names: [t.name, ...t.aliases] })),
   );
+  // 両面カードの裏面も、名前と効果テキストを表と同じように結ぶ
+  const faces = toCardRows(input.cards);
   // 短い名前・1 語の名前は一般語と衝突するので、2 語以上かつ 8 文字以上に限る
   const cardMatcher = new Matcher(
-    input.cards
+    faces
       .filter((c) => c.name.trim().split(/\s+/).length >= 2 && c.name.length >= 8)
       .map((c) => ({ key: c.slug, names: [c.name] })),
   );
@@ -63,7 +66,7 @@ export function relate(input: {
   }
 
   const cardTerms = new Rows<{ cardSlug: string; termId: number }>();
-  for (const card of input.cards) {
+  for (const card of faces) {
     if (card.effect_raw === null) continue;
     for (const termId of termMatcher.match(card.effect_raw)) {
       cardTerms.add({ cardSlug: card.slug, termId });

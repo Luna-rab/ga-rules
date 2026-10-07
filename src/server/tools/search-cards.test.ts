@@ -30,6 +30,32 @@ const shown = (text: string, all: { slug: string }[]) =>
   all.filter((c) => linesOf(text).some((l) => hasSlug(l, c.slug))).map((c) => c.slug);
 const hasNumber = (text: string, n: number) => new RegExp(`(^|[^0-9])${n}($|[^0-9])`).test(text);
 
+describe("search_cards: 両面カードの裏面", () => {
+  test("裏面にしか無いサブタイプ SHENJU で、裏面の 4 枚が表の slug を添えて出る", () => {
+    const out = run({ subtype: "SHENJU" });
+    expect(out.isError).toBeFalsy();
+    const line = linesOf(out.text).find((l) => hasSlug(l, "seiryuu-azure-dragon"));
+    expect(line).toContain("back face of fabled-azurite-fatestone");
+    expect(out.count).toBe(4);
+  });
+
+  test.each([{ legal_in: "STANDARD" }, { banned_in: "STANDARD" }])(
+    "%o では、デッキに入らない裏面を外す",
+    (format) => {
+      const out = run({ ...format, subtype: "FATEBOUND" });
+      const backs = cards("front_slug IS NOT NULL");
+      expect(backs.length).toBeGreaterThan(0);
+      expect(shown(out.text, backs)).toEqual([]);
+      expect(out.text).not.toContain("back face of");
+    },
+  );
+
+  test("text と power の条件が裏面の名前・ステータスに当たる", () => {
+    const out = run({ text: "Seiryuu Azure", power_min: 4 });
+    expect(linesOf(out.text).some((l) => hasSlug(l, "seiryuu-azure-dragon"))).toBe(true);
+  });
+});
+
 describe("search_cards: 値の誤り", () => {
   test("element の誤りは isError で、13 種すべての値を返す", () => {
     const out = run({ element: "FLAME" });

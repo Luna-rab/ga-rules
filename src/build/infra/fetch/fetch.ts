@@ -1,7 +1,7 @@
 import { $ } from "bun";
 import { mkdirSync, rmSync } from "node:fs";
 import { z } from "zod";
-import { CardSchema } from "../card-schema";
+import { CardFaceSchema, CardSchema } from "../card-schema";
 import { CARDS_DIR, DATA_DIR, RULES_DIR, SOURCE_FILE } from "./data-dir";
 
 const RULES_REPO = "weebsoftheshore/gitbook-rules";
@@ -48,15 +48,34 @@ async function fetchRules(): Promise<string> {
   return commit;
 }
 
+// 裏面は版（editions）ごとに other_orientations として繰り返し載る。版の情報は保存しない。
+const ApiCard = CardSchema.omit({ back: true }).extend({
+  editions: z.array(z.object({ other_orientations: z.array(CardFaceSchema).nullish() })),
+});
+
 const CardsPage = z.object({
-  data: z.array(CardSchema),
+  data: z.array(ApiCard),
   total_cards: z.number(),
   total_pages: z.number(),
 });
 
-async function fetchCardsPage(page: number): Promise<z.infer<typeof CardsPage>> {
+type Card = z.infer<typeof CardSchema>;
+
+// 版ごとの裏面を 1 つにまとめる。版によって中身が違えば、どれを正とするか決められないので止める。
+function toCard({ editions, ...card }: z.infer<typeof ApiCard>): Card {
+  const backs = [
+    ...new Set(editions.flatMap((e) => e.other_orientations ?? []).map((f) => JSON.stringify(f))),
+  ];
+  if (backs.length > 1) throw new Error(`cards: ${card.slug} has ${backs.length} different backs`);
+  return { ...card, back: backs[0] ? CardFaceSchema.parse(JSON.parse(backs[0])) : null };
+}
+
+async function fetchCardsPage(
+  page: number,
+): Promise<{ data: Card[]; total_cards: number; total_pages: number }> {
   const res = await fetchOk(`${CARDS_URL}?page_size=${CARDS_PAGE_SIZE}&page=${page}`);
-  return CardsPage.parse(await res.json());
+  const parsed = CardsPage.parse(await res.json());
+  return { ...parsed, data: parsed.data.map(toCard) };
 }
 
 async function fetchCards(): Promise<number> {

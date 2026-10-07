@@ -156,6 +156,14 @@ export const ERRATA_CORRECTIONS: readonly Correction[] = [
     "can attack using this weapon",
     "can wield this weapon",
   ),
+  {
+    kind: "card-text",
+    cardSlug: "huaji-of-abyssal-fall",
+    from: "can attack using this weapon",
+    to: "can wield this weapon",
+    reason:
+      "ERRATA huaji-of-heavens-rise#ruling:2026-08-16:1 が裏面の効果テキストに当たっていない。裏面にも表と同じ文がある",
+  },
   errata(
     "impact-hammer#ruling:2026-08-16:1",
     "Whenever a unit uses this weapon for an attack,",

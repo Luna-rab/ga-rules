@@ -25,7 +25,8 @@ export type TocEntry = { pageId: string; parentPageId: string | null; position: 
 // data/cards/<slug>.json と同じ形（列名もそのまま）
 export type CardReference = { kind: string; name: string; slug: string; direction: string };
 export type RawRuling = { title: string; date_added: string; description: string };
-export type Card = {
+// 両面カードの裏面も同じ列を持つ
+export type CardFace = {
   slug: string;
   name: string;
   types: string[];
@@ -39,9 +40,12 @@ export type Card = {
   durability: number | null;
   speed: boolean | null;
   effect_raw: string | null;
+};
+export type Card = CardFace & {
   rule: RawRuling[] | null;
   references: CardReference[] | null;
   legality: Record<string, { limit: number }> | null;
+  back: CardFace | null; // 片面のカードは null
 };
 
 export type Ruling = {

@@ -25,6 +25,7 @@ function card(
     rule: opts.rule ?? null,
     references: opts.references ?? null,
     legality: null,
+    back: null,
   };
 }
 

@@ -4,6 +4,7 @@ import { drizzle } from "drizzle-orm/bun-sqlite";
 import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { FTS_REBUILD_SQL } from "../../shared/db/fts";
 import * as schema from "../../shared/db/schema";
+import { toCardRows } from "../domain/faces";
 import type { Card, Page, Ruling, Term, TocEntry } from "../domain/model";
 import type { Relations } from "../domain/relate";
 import { createTables } from "./create-tables";
@@ -118,7 +119,7 @@ function insertRows(
 
   insert(
     schema.card,
-    cards.map((c) => ({
+    toCardRows(cards).map((c) => ({
       slug: c.slug,
       name: c.name,
       types: JSON.stringify(c.types),
@@ -133,6 +134,7 @@ function insertRows(
       speed: c.speed,
       effectRaw: c.effect_raw,
       legality: c.legality === null ? null : JSON.stringify(c.legality),
+      frontSlug: c.frontSlug,
     })),
   );
   insert(

@@ -41,6 +41,7 @@ const card: Card = {
     { kind: "RELEASE", name: "Fractured Memories", slug: "crystal-mastery", direction: "TO" },
   ],
   legality: { STANDARD: { limit: 1 } },
+  back: null,
 };
 
 // 返り値が Promise で、それが失敗することを確かめる（同期の throw は通さない）。
@@ -96,6 +97,14 @@ describe("readCards", () => {
     const cards = await readCards(dataDir);
 
     expect(cards.toSorted((x, y) => x.slug.localeCompare(y.slug))).toEqual([card, plain]);
+  });
+
+  test("両面カードの裏面（back）も Card の back として返す", async () => {
+    const { rule: _r, references: _ref, legality: _l, back: _b, ...face } = card;
+    const doubleFaced: Card = { ...card, back: { ...face, slug: "back-face", name: "Back Face" } };
+    put("cards/x.json", cardJson(doubleFaced));
+
+    expect(await readCards(dataDir)).toEqual([doubleFaced]);
   });
 
   test("slug に大文字を含むと失敗する", async () => {
