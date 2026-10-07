@@ -1,5 +1,14 @@
 import type { z } from "zod";
-import { CONFUSING_TERMS, GAME_INTRO, OVERVIEW_CAVEAT } from "../overview-text";
+import {
+  BASIC_TERMS,
+  ELEMENT_NOTE,
+  ELEMENTS,
+  GAME_FLOW,
+  GAME_INTRO,
+  OVERVIEW_CAVEAT,
+  PROPER_NOUN_RULE,
+  TERM_MAPPINGS,
+} from "../overview-text";
 import { renderSections } from "../render/clauses";
 import type { ToolDefinition } from "./types";
 
@@ -11,7 +20,23 @@ export const getGameOverview: ToolDefinition<z.ZodRawShape> = {
   handler: (ctx) => {
     const { toc, overview } = ctx.catalog;
 
-    const confusing = CONFUSING_TERMS.map((t) => `- ${t.term}: ${t.note}`).join("\n");
+    const mappings = [
+      "| Term from other games | Grand Archive term | Look up |",
+      "| --- | --- | --- |",
+      ...TERM_MAPPINGS.map((m) => `| ${m.from} | ${m.to} | ${m.lookup} |`),
+    ].join("\n");
+    const terms = BASIC_TERMS.map((t) => `- ${t.term}: ${t.definition} (${t.lookup})`).join("\n");
+    const flow = GAME_FLOW.map((l) => `- ${l}`).join("\n");
+    const elements = [
+      ...ELEMENTS.map((e) => {
+        // Norm・Exalted は群の名前とエレメントの名前が同じなので、群の名前だけを書く
+        const names = e.names.join(", ");
+        const label = names === e.group ? names : `${e.group}: ${names}`;
+        return `- ${label}${e.note ? ` — ${e.note}` : ""}`;
+      }),
+      "",
+      ELEMENT_NOTE,
+    ].join("\n");
     const excerpts = overview
       .map((p) => `### ${p.title} (${p.pageId})\n\n${renderSections(p.sections)}`)
       .join("\n\n");
@@ -19,11 +44,18 @@ export const getGameOverview: ToolDefinition<z.ZodRawShape> = {
 
     const text = [
       "# Grand Archive overview",
+      PROPER_NOUN_RULE,
       GAME_INTRO,
-      "## Terms easily confused with other games",
-      confusing,
       "## How to use this overview",
       OVERVIEW_CAVEAT,
+      "## Terms from other games",
+      mappings,
+      "## Basic terms",
+      terms,
+      "## Game flow",
+      flow,
+      "## Elements",
+      elements,
       "## Rules excerpts",
       excerpts,
       "## Table of contents (title | page_id)",

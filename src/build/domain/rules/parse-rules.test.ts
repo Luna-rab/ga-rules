@@ -48,13 +48,13 @@ describe("parseRules: ページ・節・条文と hint", () => {
       '# Game Mechanics - Damage\n\n#### General Rules:\n\n13. Damage is marked.\n\n{% hint style="warning" %}\nChampions with Immortality will not die.\n{% endhint %}\n\n14. Next.',
   };
 
-  test("warning の hint は「例外: 」を付けて直前の条文 13 に入り、14 には入らない", () => {
+  test("warning の hint は「Exception:」を付けて直前の条文 13 に入り、14 には入らない", () => {
     const pages = parse([damage]);
     const c13 = clause(pages, "game-mechanics-damage#General Rules:13");
     expect(c13.number).toBe("13");
     expect(c13.sectionId).toBe("game-mechanics-damage#General Rules");
     expect(c13.text).toContain("Damage is marked.");
-    expect(c13.text).toContain("例外: Champions with Immortality will not die.");
+    expect(c13.text).toContain("Exception: Champions with Immortality will not die.");
     const c14 = clause(pages, "game-mechanics-damage#General Rules:14");
     expect(c14.text).toContain("Next.");
     expect(c14.text).not.toContain("Immortality");
@@ -75,10 +75,10 @@ describe("parseRules: ページ・節・条文と hint", () => {
   });
 
   test.each([
-    ['style="danger"', "例外: Hinted text."],
-    ['style="info"', "例: Hinted text."],
-    ['style="success"', "例: Hinted text."],
-    ['style="success" icon="book-sparkles"', "例: Hinted text."],
+    ['style="danger"', "Exception: Hinted text."],
+    ['style="info"', "Example: Hinted text."],
+    ['style="success"', "Example: Hinted text."],
+    ['style="success" icon="book-sparkles"', "Example: Hinted text."],
   ])("hint %s は直前の条文に「%s」として入る", (attrs, expected) => {
     const pages = parse([withHint(attrs)]);
     const c1 = clause(pages, "p#General Rules:1");
@@ -87,10 +87,10 @@ describe("parseRules: ページ・節・条文と hint", () => {
     expect(clause(pages, "p#General Rules:2").text).not.toContain("Hinted text.");
   });
 
-  test("info・success の hint には「例外: 」が付かない", () => {
+  test("info・success の hint には「Exception:」が付かない", () => {
     for (const attrs of ['style="info"', 'style="success" icon="book-sparkles"']) {
       const c1 = clause(parse([withHint(attrs)]), "p#General Rules:1");
-      expect(c1.text).not.toContain("例外: ");
+      expect(c1.text).not.toContain("Exception:");
     }
   });
 
@@ -104,7 +104,7 @@ describe("parseRules: ページ・節・条文と hint", () => {
     ]);
     const c0 = clause(pages, "p#Sec:0");
     expect(c0.number).toBe("0");
-    expect(c0.text).toContain("例: Lead hint.");
+    expect(c0.text).toContain("Example: Lead hint.");
     expect(clause(pages, "p#Sec:1").text).not.toContain("Lead hint.");
   });
 
@@ -119,7 +119,7 @@ describe("parseRules: ページ・節・条文と hint", () => {
     const c1 = clause(pages, "p#General Rules:1");
     expect(c1.number).toBe("1");
     expect(c1.text).toContain("A");
-    expect(c1.text).toContain("例: X");
+    expect(c1.text).toContain("Example: X");
     const c2 = clause(pages, "p#General Rules:2");
     expect(c2.number).toBe("2");
     expect(c2.text).toContain("B");
@@ -725,7 +725,7 @@ describe("parseRules: GitBook の記法を本文に残さない", () => {
     const pages = one(
       '1. A\n\n{% hint style="info" %}\n![](../../.gitbook/assets/serve.jpg)\\\n\\\nE.g., Ciel\'s mastery resolves.\nSecond line.\n{% endhint %}',
     );
-    expect(clause(pages, "p#S:1").text).toBe("A\n例: Ciel's mastery resolves. Second line.");
+    expect(clause(pages, "p#S:1").text).toBe("A\nExample: Ciel's mastery resolves. Second line.");
   });
 
   test("<br> が残らない", () => {
@@ -766,9 +766,9 @@ describe("parseRules: GitBook の記法を本文に残さない", () => {
     expect(clause(pages, "p#S:2").text).toBe('The flip side is "may" and italic.');
   });
 
-  test("本文が E.g. で始まる hint は「例: E.g., 」にならない", () => {
+  test("本文が E.g. で始まる hint は「Example: E.g., 」にならない", () => {
     const pages = one('1. A\n\n{% hint style="info" %}\nE.g., Cards like X.\n{% endhint %}');
-    expect(clause(pages, "p#S:1").text).toBe("A\n例: Cards like X.");
+    expect(clause(pages, "p#S:1").text).toBe("A\nExample: Cards like X.");
   });
 
   test("画像と説明文だけの hint は捨てる", () => {
@@ -782,7 +782,7 @@ describe("parseRules: GitBook の記法を本文に残さない", () => {
     const pages = one(
       '1. A\n\n{% hint style="warning" %}\n_Immortality prevents this._\n{% endhint %}',
     );
-    expect(clause(pages, "p#S:1").text).toBe("A\n例外: Immortality prevents this.");
+    expect(clause(pages, "p#S:1").text).toBe("A\nException: Immortality prevents this.");
   });
 
   test("パンくずの段落 General Rules: は条文にならない", () => {

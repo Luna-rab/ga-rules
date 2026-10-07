@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { OVERVIEW_PAGE_IDS } from "../../shared/overview";
 import type { ToolContext } from "../context";
+import { findTerms } from "../lookup/glossary";
+import { ELEMENTS } from "../overview-text";
 import { openTestContext } from "../testing";
 import { getGameOverview } from "./get-game-overview";
 
@@ -27,6 +29,14 @@ function clausesOf(pageId: string): { clause_id: string; text: string }[] {
     .map((r) => ClauseRow.parse(r));
 }
 
+function idExists(id: string): boolean {
+  return (
+    ctx.db.query("SELECT 1 FROM rule_page WHERE page_id = ?").get(id) !== null ||
+    ctx.db.query("SELECT 1 FROM rule_section WHERE section_id = ?").get(id) !== null ||
+    ctx.db.query("SELECT 1 FROM rule_clause WHERE clause_id = ?").get(id) !== null
+  );
+}
+
 const lines = out.text.split("\n");
 const indentOf = (line: string) => line.length - line.trimStart().length;
 
@@ -37,16 +47,46 @@ describe("get_game_overview", () => {
     expect(out.count).toBeGreaterThan(0);
   });
 
-  test("手書きの 3 項目が入る", () => {
-    // 1. MTG などとは別のゲームだという説明
+  test("手書きの項目が入る", () => {
+    // 固有名詞を訳さない指示は、ほかの何よりも先に置く
+    expect(lines[2]).toContain("proper nouns in English");
     expect(out.text).toMatch(/Magic|MTG/);
-    // 2. 紛らわしい用語の一覧
-    for (const term of ["Opportunity", "Intent", "Materialize", "Recollection"]) {
-      expect(out.text).toContain(term);
-    }
-    // 3. この概要を根拠に答えず、該当ページを引いてから答える注意
+    // この概要を根拠に答えず、該当ページを引いてから答える注意
     expect(out.text).toMatch(/(do not|don't|never)[^.]*\b(answer|rely|base)/i);
     expect(out.text).toMatch(/page/i);
+    for (const heading of ["Terms from other games", "Basic terms", "Game flow", "Elements"]) {
+      expect(out.text).toContain(`## ${heading}`);
+    }
+    expect(out.text).toContain("| exile | Banish");
+    expect(out.text).toContain("| priority | Opportunity");
+  });
+
+  test("調べる先に書いた語は get_term で 1 つに決まる", () => {
+    const names = [...out.text.matchAll(/get_term\("([^"]+)"\)/g)].map((m) => m[1] ?? "");
+    expect(names.length).toBeGreaterThan(0);
+    for (const name of names) {
+      const hits = findTerms(ctx.catalog.terms, name).length;
+      expect({ name, hits }).toEqual({ name, hits: 1 });
+    }
+  });
+
+  test("調べる先に書いたページ ID・節 ID・条文 ID は索引にある", () => {
+    // 手書きの部分だけを見る。抜粋と目次は索引から作るので確かめなくてよい
+    const handWritten = out.text.slice(0, out.text.indexOf("## Rules excerpts"));
+    const ids = [...handWritten.matchAll(/`([a-z0-9-]+(?:#[^`]+)?)`/g)].map((m) => m[1] ?? "");
+    expect(ids.length).toBeGreaterThan(0);
+    for (const id of ids) expect({ id, found: idExists(id) }).toEqual({ id, found: true });
+  });
+
+  test("エレメントの一覧は、索引のカードにあるエレメントと過不足なく一致する", () => {
+    // 新しいエレメントのカードが出たら、overview-text.ts の ELEMENTS に足す
+    const inCards = ctx.db
+      .query("SELECT DISTINCT j.value AS element FROM card, json_each(card.elements) j")
+      .all()
+      .map((r) => z.object({ element: z.string() }).parse(r).element)
+      .toSorted();
+    const listed = ELEMENTS.flatMap((e) => e.names.map((n) => n.toUpperCase())).toSorted();
+    expect(listed).toEqual(inCards);
   });
 
   test("概要の 5 ページの条文が [clause_id] 付きで、定数の順に並ぶ", () => {

@@ -127,21 +127,21 @@ function lineOf(query: string, clauseId: string): string {
 }
 
 describe("search_rules: 条文の hint", () => {
-  test("「例: 」の hint は 1 行表示から外れる", () => {
-    // naming#General Rules:6 には「例: A Tome of Sacred Lightning ...」の hint が付いている
+  test("「Example:」の hint は 1 行表示から外れる", () => {
+    // naming#General Rules:6 には「Example: A Tome of Sacred Lightning ...」の hint が付いている
     const line = lineOf("Tome of Sacred Lightning", "naming#General Rules:6");
     expect(line).toContain("dynamically changed");
-    expect(line).not.toContain("例: ");
+    expect(line).not.toContain("Example:");
     expect(line).not.toContain("Banish Tome");
   });
 
-  test("「例外: 」の hint は「 / 例外: 」で区切って残る", () => {
+  test("「Exception:」の hint は「 / Exception:」で区切って残る", () => {
     const line = lineOf(
       "Opportunity Recollection phase",
       "turn-order-materialize-phase#General Rules:5",
     );
     expect(line).toContain(
-      "Recollection phase. / 例外: Players are not naturally given Opportunity",
+      "Recollection phase. / Exception: Players are not naturally given Opportunity",
     );
   });
 });
