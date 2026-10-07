@@ -1,3 +1,4 @@
+import { HINT_EXAMPLE, HINT_EXCEPTION } from "../../../shared/hint";
 import type { Correction } from "../corrections";
 import { DataError } from "../errors";
 import type { Clause, LinkTarget, Page, RawPage, Section, SectionKind } from "../model";
@@ -116,7 +117,7 @@ const IMAGE_CAPTION = /^_[^_]+_$/;
 
 function hintPrefix(attrs: string): string {
   const style = /style="([^"]*)"/.exec(attrs)?.[1];
-  return style === "warning" || style === "danger" ? "例外: " : "例: ";
+  return style === "warning" || style === "danger" ? HINT_EXCEPTION : HINT_EXAMPLE;
 }
 
 function splitPage(raw: RawPage): DraftPage {
@@ -207,7 +208,7 @@ function splitPage(raw: RawPage): DraftPage {
       afterHint = true;
       const caption = hadImage && body.length === 1 && IMAGE_CAPTION.test(body[0] ?? "");
       if (body.length === 0 || caption) continue;
-      // hint は 1 行にまとめる。search_rules が行頭の「例: 」「例外: 」で hint を見分ける
+      // hint は 1 行にまとめる。search_rules が行頭のラベル（shared/hint.ts）で hint を見分ける
       const text = body.join(" ").replace(/^E\.g\.,?\s*/, "");
       ensureClause().lines.push(hintPrefix(hint[1] ?? "") + text);
       continue;

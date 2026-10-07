@@ -44,7 +44,7 @@ describe("get_rules_page: 通常のページ", () => {
 
   test("General Rules:13 と Immortality の例外が入る", () => {
     expect(out.text).toContain("[game-mechanics-damage#General Rules:13]");
-    expect(lines.some((l) => l.startsWith("例外:") && l.includes("Immortality"))).toBe(true);
+    expect(lines.some((l) => l.startsWith("Exception:") && l.includes("Immortality"))).toBe(true);
   });
 
   test("節付きの page_id でも、索引にあるこのページの条文 ID がすべて入る", () => {

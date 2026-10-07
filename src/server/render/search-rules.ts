@@ -1,3 +1,4 @@
+import { HINT_EXAMPLE, HINT_EXCEPTION } from "../../shared/hint";
 import { renderRuling, type RulingNode } from "./rulings";
 
 export type ClauseHit = { clauseId: string; pageTitle: string; text: string };
@@ -7,12 +8,12 @@ function oneLine(s: string): string {
   return s.replace(/\s+/g, " ").trim();
 }
 
-// ビルドが hint を「例: 」「例外: 」で始まる 1 行にまとめている前提。例外は条文を打ち消すので外さない
+// 例外は条文を打ち消すので外さない
 function clauseOneLine(text: string): string {
   const lines = text
     .split("\n")
-    .filter((l) => !l.startsWith("例: "))
-    .map((l) => (l.startsWith("例外: ") ? `/ ${l}` : l));
+    .filter((l) => !l.startsWith(HINT_EXAMPLE))
+    .map((l) => (l.startsWith(HINT_EXCEPTION) ? `/ ${l}` : l));
   // 節の頭の hint は番号 0 の条文になる。元の本文に戻さないと、その行は引用 ID だけになる
   return oneLine(lines.length > 0 ? lines.join("\n") : text);
 }

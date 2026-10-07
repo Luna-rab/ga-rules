@@ -82,7 +82,7 @@ function data(relations: Partial<Relations> = {}): IndexData {
                 clauseId: CLAUSE_ID,
                 sectionId: SECTION_ID,
                 number: "13",
-                text: "Damage is marked. 例外: Champions with Immortality will not die.",
+                text: "Damage is marked. Exception: Champions with Immortality will not die.",
                 links: [{ pageId: PAGE_ID, sectionId: SECTION_ID }],
               },
             ],
@@ -153,7 +153,7 @@ describe("writeIndex: 各テーブルの行", () => {
         clause_id: CLAUSE_ID,
         section_id: SECTION_ID,
         number: "13",
-        text: "Damage is marked. 例外: Champions with Immortality will not die.",
+        text: "Damage is marked. Exception: Champions with Immortality will not die.",
       },
     ]);
     expect(db.query("SELECT clause_id, page_id, section_id FROM clause_link").all()).toEqual([
