@@ -455,7 +455,7 @@ graph DB は使わない。参照は最大 2 ホップで閉路が無く、結�
   - 裁定の URL は、cite_id の `#ruling:` より前の slug から作る（`rulingUrl`）。裁定の行は `[cite_id](URL) 題 (日付): 本文`。裏面の slug で `get_card` を呼んでも、裁定は表のカードに付いているので表の slug の URL になる。
   - `get_card` のカード名の見出しは `## 名前 (slug) (URL)`、裏面の見出しは `### Back face: 名前 (slug) (URL)` と、それぞれ自分の slug の URL を付ける。
   - `search_cards`・`find_cards` のカードの行には URL を付けない。1 行が長くなるだけで、詳しく見るなら `get_card` を呼ぶから。
-- モデルへの指示（`initialize` の `instructions`）は、出典を `[ID](URL)` の Markdown リンクで書かせ、URL が出ていない ID は `[ID]` のまま書かせる。
+- モデルへの指示（`initialize` の `instructions`）は、出典を `[ID](URL)` の Markdown リンクで書かせ、条文の行に URL が無いとき（`get_rules_page`・`get_term` など）は、その条文が入っている節の見出し `#### 見出し (URL)` の URL を使わせる。どこにも URL が出ていない ID は `[ID]` のまま書かせる。
 - 呼び方の誤り（存在しない ID・slug・属性の値、引数が 1 つも無い）は `isError: true` にして、直し方を書く。モデルは呼び直す。
 - 呼び方は正しく該当が無いだけなら、`isError` にせず「該当なし」だけを返す。推測の材料は付けない。言い換えての呼び直しを繰り返させず、利用者に「見つからない」と伝えさせる。
 - 変更履歴の `README.md`（8,738 トークン）はどのツールからも返さない。
