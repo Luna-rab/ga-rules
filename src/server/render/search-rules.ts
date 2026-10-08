@@ -19,6 +19,14 @@ function clauseOneLine(text: string): string {
   return oneLine(lines.length > 0 ? lines.join("\n") : text);
 }
 
+// snippet が端で切ったリンクの残り（書き換えられない `](target)` と、閉じない `[`）を、文言だけにする
+function dropCutLinks(excerpt: string): string {
+  return excerpt
+    .replace(/^(\.\.\.)?([^[\]]*)\]\((?!https?:\/\/)[^)]*\)/, "$1$2")
+    .replace(/\[([^[\]]*)\]\((?!https?:\/\/)[^[\]]*$/, "$1...")
+    .replace(/\[([^\]]*)$/, "$1");
+}
+
 export function renderSearchRules(
   clauses: ClauseHit[],
   rulings: RulingHit[],
@@ -26,7 +34,7 @@ export function renderSearchRules(
 ): string {
   const clauseLines = clauses.map(
     (c) =>
-      `- ${citeLink(c.clauseId, c.url)} (${c.pageTitle}) ${clauseOneLine(rewriteRuleLinks(c.text, urls))}`,
+      `- ${citeLink(c.clauseId, c.url)} (${c.pageTitle}) ${dropCutLinks(clauseOneLine(rewriteRuleLinks(c.text, urls)))}`,
   );
   const rulingLines = rulings.map((r) => {
     const names = r.cardNames.join(", ");
