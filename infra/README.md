@@ -82,10 +82,11 @@ claude.ai の Customize > Connectors > Add custom connector にこの URL を貼
 
 ### 回数制限が送信元の書いた IP に騙されないこと
 
-`X-Forwarded-For` の左側を毎回変えて 121 件送り、最後が 429 になることを確かめる。左側で数えていれば 121 件すべて通ってしまう。全体の枠（1 秒 10 件）に掛からないよう、間を空けて送る。
+`X-Forwarded-For` の左側を毎回変えて 121 件送り、最後が 429 になることを確かめる。左側で数えていれば 121 件すべて通ってしまう。全体の枠（1 秒 10 件）に掛からないよう間を空けて送り、IP ごとの枠は時計の分の切れ目で数え直すので、分の頭から始める。
 
 ```sh
 URL=$(cd infra/app && pulumi stack output url)
+sleep $((60 - 10#$(date +%S)))
 for i in $(seq 121); do
   curl -s -o /dev/null -w '%{http_code}\n' -X POST "$URL" \
     -H "X-Forwarded-For: 10.0.0.$i" -H 'content-type: application/json' \
@@ -110,6 +111,8 @@ gh workflow run deploy.yml   # ingress を all に戻す
 ## 止まったときに戻す
 
 予算 ¥1,000 を超えると、Cloud Run は外からのリクエストを受けなくなる。原因（Cloud Logging のアクセスログ）を確かめてから `gh workflow run deploy.yml` を実行すると、`infra/app` の `pulumi up` が ingress を全体に戻す。予算を超えたままだと、次の予算の通知（1 日に数回）でまた止まる。その月のあいだ公開を続けるなら、`infra/bootstrap/index.ts` の予算額を上げて B をやり直す。
+
+月が替わって集計が 0 に戻っても、自動では公開に戻らない。濫用が続いていると、また予算分だけ掛かってから止まるため。戻すのは上の手順で人が行う。
 
 ## 注意
 

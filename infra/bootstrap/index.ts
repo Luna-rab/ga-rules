@@ -105,9 +105,17 @@ const stopperSa = new gcp.serviceaccount.Account(
   afterApis,
 );
 const stopperMember = pulumi.interpolate`serviceAccount:${stopperSa.email}`;
-for (const role of ["roles/run.developer", "roles/workflows.invoker"]) {
-  new gcp.projects.IAMMember(`stopper-${role}`, { project, role, member: stopperMember });
-}
+const stopperRoles: pulumi.Resource[] = ["roles/run.developer", "roles/workflows.invoker"].map(
+  (role) => new gcp.projects.IAMMember(`stopper-${role}`, { project, role, member: stopperMember }),
+);
+// Cloud Run のサービスを書き換えるには、ingress だけを変えるときでも実行用 SA の actAs が要る。
+stopperRoles.push(
+  new gcp.serviceaccount.IAMMember("stopper-act-as-run", {
+    serviceAccountId: runSa.name,
+    role: "roles/iam.serviceAccountUser",
+    member: stopperMember,
+  }),
+);
 
 // サービス名は infra/app の cloudrunv2.Service の name と揃える。
 const serviceName = `projects/${project}/locations/${region}/services/ga-rules`;
@@ -147,16 +155,21 @@ main:
   },
   afterApis,
 );
-new gcp.eventarc.Trigger("budget", {
-  name: "ga-rules-budget",
-  location: region,
-  matchingCriterias: [
-    { attribute: "type", value: "google.cloud.pubsub.topic.v1.messagePublished" },
-  ],
-  transport: { pubsub: { topic: budgetTopic.id } },
-  destination: { workflow: stopper.id },
-  serviceAccount: stopperSa.email,
-});
+// 権限より先に作ると、最初の通知で Workflows を起動できない。
+new gcp.eventarc.Trigger(
+  "budget",
+  {
+    name: "ga-rules-budget",
+    location: region,
+    matchingCriterias: [
+      { attribute: "type", value: "google.cloud.pubsub.topic.v1.messagePublished" },
+    ],
+    transport: { pubsub: { topic: budgetTopic.id } },
+    destination: { workflow: stopper.id },
+    serviceAccount: stopperSa.email,
+  },
+  { dependsOn: stopperRoles },
+);
 
 export const workloadIdentityProvider = provider.name;
 export const deployServiceAccount = deploySa.email;

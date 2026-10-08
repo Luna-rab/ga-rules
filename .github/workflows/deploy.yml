@@ -41,6 +41,8 @@ jobs:
           command: up
           stack-name: prod
           work-dir: infra/app
+          # 予算で止めたときの ingress の書き換えは Pulumi の外で起きる。refresh しないと差分が出ず、公開に戻らない。
+          refresh: true
           cloud-url: gs://${{ vars.STATE_BUCKET }}
       - name: Smoke test
         env:

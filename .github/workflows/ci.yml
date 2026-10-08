@@ -17,4 +17,6 @@ jobs:
       # oxlint は型を見て infra/ もリントするので、check の前に infra/ の依存も入れる。
       - run: bun install --frozen-lockfile --cwd infra
       - run: bun run check
+      # src/server のテストは索引が要るので CI では流さないが、これは索引を使わない。
+      - run: bun test src/server/rate-limit.test.ts
       - run: bun run --cwd infra typecheck
