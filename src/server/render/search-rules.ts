@@ -21,17 +21,10 @@ function clauseOneLine(text: string): string {
 
 // snippet が端で切ったリンクの残り（書き換えられない `](target)` と、閉じない `[`）を、文言だけにする
 function dropCutLinks(excerpt: string): string {
-  return (
-    excerpt
-      // 先頭が target の途中（`...and-permissions)`・`...p#General Rules)`）なら、閉じ括弧までを落とす
-      .replace(/^\.\.\.(?:[^\s()[\]#]*-[^\s()[\]#]*|[^()[\]]*#[^()[\]]*)\)/, "...")
-      .replace(/^(\.\.\.)?([^[\]]*)\]\((?!https?:\/\/)(?:[^()]|\([^()]*\))*\)/, "$1$2")
-      .replace(
-        /\[([^[\]]*)\]\((?!https?:\/\/)(?:[^()[\]]|\([^()[\]]*\))*(?:\([^()[\]]*)?$/,
-        "$1...",
-      )
-      .replace(/\[([^\]]*)$/, "$1")
-  );
+  return excerpt
+    .replace(/^(\.\.\.)?([^[\]]*)\]\((?!https?:\/\/)(?:[^()]|\([^()]*\))*\)/, "$1$2")
+    .replace(/\[([^[\]]*)\]\((?!https?:\/\/)(?:[^()[\]]|\([^()[\]]*\))*(?:\([^()[\]]*)?$/, "$1...")
+    .replace(/\[([^\]]*)$/, "$1");
 }
 
 export function renderSearchRules(

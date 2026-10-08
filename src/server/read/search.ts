@@ -2,10 +2,12 @@ import type { Database } from "bun:sqlite";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { z } from "zod";
+import { linkSpans } from "../render/rule-links";
 import type { ClauseHit, RulingHit } from "../render/search-rules";
 
 const ClauseRow = z.object({
   clauseId: z.string(),
+  full: z.string(),
   pageTitle: z.string(),
   url: z.string(),
   text: z.string(),
@@ -27,10 +29,30 @@ const RULING_CANDIDATES = 100;
 // 当たった語の付近だけを行に載せる（FTS5 の snippet が切り出す語数）
 const SNIPPET_TOKENS = 64;
 
+const ELLIPSIS = "...";
+
+// snippet の抜粋の両端がリンクの途中なら、そのリンクが丸ごと入るまで広げる。
+// 切れたリンクの target は、本文と見分けられないまま残るため。
+function withWholeLinks(excerpt: string, full: string): string {
+  const core = excerpt.slice(
+    excerpt.startsWith(ELLIPSIS) ? ELLIPSIS.length : 0,
+    excerpt.endsWith(ELLIPSIS) ? -ELLIPSIS.length : undefined,
+  );
+  const at = full.indexOf(core);
+  if (at < 0) return excerpt;
+  let start = at;
+  let end = at + core.length;
+  for (const [a, b] of linkSpans(full)) {
+    if (a < start && start < b) start = a;
+    if (a < end && end < b) end = b;
+  }
+  return `${start > 0 ? ELLIPSIS : ""}${full.slice(start, end)}${end < full.length ? ELLIPSIS : ""}`;
+}
+
 export function searchClauses(db: Database, match: string, limit: number): ClauseHit[] {
   return drizzle(db)
     .all(
-      sql`SELECT c.clause_id AS clauseId, p.title AS pageTitle, s.url AS url,
+      sql`SELECT c.clause_id AS clauseId, c.text AS full, p.title AS pageTitle, s.url AS url,
                  snippet(rule_clause_fts, 0, '', '', '...', ${SNIPPET_TOKENS}) AS text
           FROM rule_clause_fts f
           JOIN rule_clause c ON c.rowid = f.rowid
@@ -40,7 +62,8 @@ export function searchClauses(db: Database, match: string, limit: number): Claus
           ORDER BY bm25(rule_clause_fts), c.clause_id
           LIMIT ${limit}`,
     )
-    .map((r) => ClauseRow.parse(r));
+    .map((r) => ClauseRow.parse(r))
+    .map(({ full, ...hit }) => ({ ...hit, text: withWholeLinks(hit.text, full) }));
 }
 
 // 同じ文面の裁定は、関連度が最も高い 1 件にまとめ、付いているカードの枚数と 3 枚までの名前を添える
