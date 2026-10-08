@@ -78,7 +78,40 @@ cd infra/app && pulumi stack output url
 
 claude.ai の Customize > Connectors > Add custom connector にこの URL を貼り、`get_game_overview` が呼ばれることを確かめる。
 
+## E. 濫用への備えを確かめる（初回のデプロイのあと 1 回）
+
+### 回数制限が送信元の書いた IP に騙されないこと
+
+`X-Forwarded-For` の左側を毎回変えて 121 件送り、最後が 429 になることを確かめる。左側で数えていれば 121 件すべて通ってしまう。全体の枠（1 秒 10 件）に掛からないよう、間を空けて送る。
+
+```sh
+URL=$(cd infra/app && pulumi stack output url)
+for i in $(seq 121); do
+  curl -s -o /dev/null -w '%{http_code}\n' -X POST "$URL" \
+    -H "X-Forwarded-For: 10.0.0.$i" -H 'content-type: application/json' \
+    -H 'accept: application/json, text/event-stream' \
+    -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+  sleep 0.15
+done | sort | uniq -c   # 200 が 120 件、429 が 1 件
+```
+
+### 予算を超えたら止まること
+
+予算の通知を装ったメッセージを送り、Cloud Run の ingress が内部だけに切り替わることを確かめる。
+
+```sh
+gcloud pubsub topics publish ga-rules-budget --message='{"costAmount":2000,"budgetAmount":1000}'
+sleep 60
+gcloud run services describe ga-rules --region=us-central1 --format='value(metadata.annotations."run.googleapis.com/ingress")'
+# internal になっていればよい。gcloud workflows executions list ga-rules-stopper --location=us-central1 で実行結果も見られる
+gh workflow run deploy.yml   # ingress を all に戻す
+```
+
+## 止まったときに戻す
+
+予算 ¥1,000 を超えると、Cloud Run は外からのリクエストを受けなくなる。原因（Cloud Logging のアクセスログ）を確かめてから `gh workflow run deploy.yml` を実行すると、`infra/app` の `pulumi up` が ingress を全体に戻す。予算を超えたままだと、次の予算の通知（1 日に数回）でまた止まる。その月のあいだ公開を続けるなら、`infra/bootstrap/index.ts` の予算額を上げて B をやり直す。
+
 ## 注意
 
-- 個人の Gmail アカウントで作ったプロジェクトは組織に属さないので、`allUsers` に公開できる。組織の下に作った場合は、組織ポリシーの「ドメイン制限付き共有」で公開が拒否されることがある。
+- 認証なしの公開は、Cloud Run の `invokerIamDisabled` で行う。個人の Gmail アカウントで作ったプロジェクトは組織に属さないので使える。組織の下に作った場合は、組織ポリシーで IAM の確認を外すことが禁じられていると、`infra/app` の適用が失敗する。
 - WIF は、リポジトリ ID `1395664644`（`Luna-rab/ga-rules`）の main ブランチからの実行だけを通す。リポジトリを作り直すと ID が変わるので、`infra/bootstrap` の設定を直して B をやり直す。

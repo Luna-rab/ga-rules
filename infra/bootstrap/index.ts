@@ -2,7 +2,9 @@ import * as gcp from "@pulumi/gcp";
 import * as pulumi from "@pulumi/pulumi";
 
 const project = gcp.config.project;
+const region = gcp.config.region;
 if (!project) throw new Error("環境変数 GOOGLE_PROJECT に GCP のプロジェクト ID を入れる");
+if (!region) throw new Error("Pulumi.prod.yaml に gcp:region を書く");
 const billingAccount = process.env.GCP_BILLING_ACCOUNT;
 if (!billingAccount) throw new Error("環境変数 GCP_BILLING_ACCOUNT に請求先アカウント ID を入れる");
 const githubRepositoryId = new pulumi.Config().require("githubRepositoryId");
@@ -16,6 +18,9 @@ const apis = [
   "iamcredentials.googleapis.com",
   "sts.googleapis.com",
   "billingbudgets.googleapis.com",
+  "pubsub.googleapis.com",
+  "workflows.googleapis.com",
+  "eventarc.googleapis.com",
 ].map((service) => new gcp.projects.Service(service, { service, disableOnDestroy: false }));
 const afterApis = { dependsOn: apis };
 
@@ -74,7 +79,10 @@ new gcp.serviceaccount.IAMMember("deploy-wif", {
   member: pulumi.interpolate`principalSet://iam.googleapis.com/${pool.name}/attribute.repository_id/${githubRepositoryId}`,
 });
 
-// 予算アラートは使用を止めない。請求の上限は infra/app の最大インスタンス数 1 で付ける。
+// 予算を超えたら Cloud Run の ingress を内部だけにする（理由は DESIGN.md の「配布とホスティング」）。
+// infra/app の pulumi up は ingress を全体に戻すので、止まったあとの main への push でも公開が再開する。
+const budgetTopic = new gcp.pubsub.Topic("budget", { name: "ga-rules-budget" }, afterApis);
+
 // 予算の通貨は請求先アカウントの通貨（JPY）と揃えないと作れない。
 const projectNumber = gcp.organizations.getProjectOutput({ projectId: project }).number;
 new gcp.billing.Budget(
@@ -85,9 +93,70 @@ new gcp.billing.Budget(
     budgetFilter: { projects: [pulumi.interpolate`projects/${projectNumber}`] },
     amount: { specifiedAmount: { currencyCode: "JPY", units: "1000" } },
     thresholdRules: [0.5, 0.9, 1].map((thresholdPercent) => ({ thresholdPercent })),
+    // 閾値に関係なく、集計が更新されるたび（1 日に数回）通知する。メールの宛先はそのまま残る。
+    allUpdatesRule: { pubsubTopic: budgetTopic.id, schemaVersion: "1.0" },
   },
   afterApis,
 );
+
+const stopperSa = new gcp.serviceaccount.Account(
+  "stopper",
+  { accountId: "ga-rules-stopper", displayName: "ga-rules budget stopper" },
+  afterApis,
+);
+const stopperMember = pulumi.interpolate`serviceAccount:${stopperSa.email}`;
+for (const role of ["roles/run.developer", "roles/workflows.invoker"]) {
+  new gcp.projects.IAMMember(`stopper-${role}`, { project, role, member: stopperMember });
+}
+
+// サービス名は infra/app の cloudrunv2.Service の name と揃える。
+const serviceName = `projects/${project}/locations/${region}/services/ga-rules`;
+const stopper = new gcp.workflows.Workflow(
+  "stopper",
+  {
+    name: "ga-rules-stopper",
+    region,
+    serviceAccount: stopperSa.id,
+    sourceContents: `
+main:
+  params: [event]
+  steps:
+    - decode:
+        assign:
+          - notice: \${json.decode(base64.decode(event.data.message.data))}
+    - underBudget:
+        switch:
+          - condition: \${notice.costAmount < notice.budgetAmount}
+            return: under budget
+    - get:
+        call: googleapis.run.v2.projects.locations.services.get
+        args:
+          name: ${serviceName}
+        result: service
+    - close:
+        assign:
+          - service.ingress: INGRESS_TRAFFIC_INTERNAL_ONLY
+    - patch:
+        call: googleapis.run.v2.projects.locations.services.patch
+        args:
+          name: ${serviceName}
+          body: \${service}
+    - done:
+        return: closed
+`,
+  },
+  afterApis,
+);
+new gcp.eventarc.Trigger("budget", {
+  name: "ga-rules-budget",
+  location: region,
+  matchingCriterias: [
+    { attribute: "type", value: "google.cloud.pubsub.topic.v1.messagePublished" },
+  ],
+  transport: { pubsub: { topic: budgetTopic.id } },
+  destination: { workflow: stopper.id },
+  serviceAccount: stopperSa.email,
+});
 
 export const workloadIdentityProvider = provider.name;
 export const deployServiceAccount = deploySa.email;
