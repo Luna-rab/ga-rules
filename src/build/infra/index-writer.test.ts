@@ -139,11 +139,6 @@ async function rejection(p: Promise<unknown>): Promise<unknown> {
   );
 }
 
-// Page.url・Section.url は model.ts にまだ無いので、型を変えずに足す
-function withUrl<T extends object>(o: T, url: string): T {
-  return { ...o, url };
-}
-
 describe("writeIndex: ページと節の URL", () => {
   test("Page.url・Section.url がそのまま rule_page.url・rule_section.url に入る", async () => {
     const base = data();
@@ -153,10 +148,11 @@ describe("writeIndex: ページと節の URL", () => {
     const withUrls: IndexData = {
       ...base,
       pages: [
-        withUrl(
-          { ...page, sections: [withUrl(section, "https://rules.gatcg.com/dir/p#general-rules")] },
-          "https://rules.gatcg.com/dir/p",
-        ),
+        {
+          ...page,
+          url: "https://rules.gatcg.com/dir/p",
+          sections: [{ ...section, url: "https://rules.gatcg.com/dir/p#general-rules" }],
+        },
       ],
     };
     await writeIndex(outPath, withUrls);
