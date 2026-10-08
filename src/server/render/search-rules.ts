@@ -22,8 +22,8 @@ function clauseOneLine(text: string): string {
 // snippet が端で切ったリンクの残り（書き換えられない `](target)` と、閉じない `[`）を、文言だけにする
 function dropCutLinks(excerpt: string): string {
   return excerpt
-    .replace(/^(\.\.\.)?([^[\]]*)\]\((?!https?:\/\/)[^)]*\)/, "$1$2")
-    .replace(/\[([^[\]]*)\]\((?!https?:\/\/)[^[\]]*$/, "$1...")
+    .replace(/^(\.\.\.)?([^[\]]*)\]\((?!https?:\/\/)(?:[^()]|\([^()]*\))*\)/, "$1$2")
+    .replace(/\[([^[\]]*)\]\((?!https?:\/\/)(?:[^()[\]]|\([^()[\]]*\))*(?:\([^()[\]]*)?$/, "$1...")
     .replace(/\[([^\]]*)$/, "$1");
 }
 
