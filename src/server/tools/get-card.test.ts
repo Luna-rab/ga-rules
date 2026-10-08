@@ -41,7 +41,9 @@ const StoredRow = z.object({
 describe("get_card: 両面カード", () => {
   test("表の slug では、裏面の名前・種別・ステータス・効果テキストも返す", () => {
     const out = run(["fabled-azurite-fatestone"]);
-    expect(out.text).toContain("### Back face: Seiryuu, Azure Dragon (seiryuu-azure-dragon)");
+    expect(out.text).toContain(
+      "### Back face: Seiryuu, Azure Dragon (seiryuu-azure-dragon) (https://index.gatcg.com/card/seiryuu-azure-dragon)",
+    );
     expect(out.text).toContain("- Types: ALLY");
     expect(out.text).toContain("cost reserve 10, power 4, life 12");
     expect(out.text).toContain("Empower X+2");
@@ -83,6 +85,45 @@ describe("get_card: 両面カード", () => {
     const out = run(["huaji-of-abyssal-fall"]);
     expect(out.text).toContain("can wield this weapon");
     expect(out.text).not.toContain("can attack using this weapon");
+  });
+});
+
+describe("get_card: カードと裁定の URL", () => {
+  const FRONT = "https://index.gatcg.com/card/fabled-azurite-fatestone";
+  const BACK = "https://index.gatcg.com/card/seiryuu-azure-dragon";
+  const RULING = "fabled-azurite-fatestone#ruling:2025-03-02:3";
+
+  test("表の slug では、先頭行がカード名・slug・表の URL、裏面の見出しは裏面自身の URL", () => {
+    const lines = run(["fabled-azurite-fatestone"]).text.split("\n");
+    expect(lines[0]).toBe(`## Fabled Azurite Fatestone (fabled-azurite-fatestone) (${FRONT})`);
+    expect(lines).toContain(
+      `### Back face: Seiryuu, Azure Dragon (seiryuu-azure-dragon) (${BACK})`,
+    );
+  });
+
+  test("裏面の slug では、先頭の見出しが裏面自身の URL で、表に付いた裁定は表の URL", () => {
+    const lines = run(["seiryuu-azure-dragon"]).text.split("\n");
+    expect(lines[0]).toBe(`## Seiryuu, Azure Dragon (seiryuu-azure-dragon) (${BACK})`);
+    const ruling = lines.find((l) => l.startsWith(`[${RULING}]`));
+    expect(ruling).toStartWith(`[${RULING}](${FRONT}) `);
+    expect(lines.some((l) => l.includes(FRONT) && l.startsWith("##"))).toBe(false);
+  });
+
+  test("通常のカードの先頭行は ## 名前 (slug) (カード URL)、裁定の行は表の URL を付ける", () => {
+    const out = run(["beguiling-coup"]);
+    expect(out.text.split("\n")[0]).toBe(
+      "## Beguiling Coup (beguiling-coup) (https://index.gatcg.com/card/beguiling-coup)",
+    );
+    expect(out.text).toContain(
+      "[beguiling-coup#ruling:2025-07-18:1](https://index.gatcg.com/card/beguiling-coup) ",
+    );
+  });
+
+  test("他のカードの裁定は、その裁定が付いたカードの URL を付ける", () => {
+    const out = run(["nullifying-lantern"]);
+    expect(out.text).toContain(
+      "[censer-of-restful-peace#ruling:2025-03-02:1](https://index.gatcg.com/card/censer-of-restful-peace) ",
+    );
   });
 });
 

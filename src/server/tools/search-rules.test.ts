@@ -57,6 +57,13 @@ describe("search_rules: 裁定", () => {
     expect(shown.length).toBeLessThanOrEqual(3);
   });
 
+  test("裁定の行は - [cite_id](https://index.gatcg.com/card/<slug>) タイトル (日付): 本文 の形", () => {
+    const at = lines.findIndex((l) => l.includes(OMEN));
+    expect(lines[at]).toMatch(
+      /^\s*- \[([^\]]+)#ruling:[^\]]+\]\(https:\/\/index\.gatcg\.com\/card\/\1\) .* \(\d{4}-\d{2}-\d{2}\): /,
+    );
+  });
+
   test("その文面の行は [引用 ID] で始まる", () => {
     const at = lines.findIndex((l) => l.includes(OMEN));
     expect(at).toBeGreaterThanOrEqual(0);

@@ -30,6 +30,17 @@ const shown = (text: string, all: { slug: string }[]) =>
   all.filter((c) => linesOf(text).some((l) => hasSlug(l, c.slug))).map((c) => c.slug);
 const hasNumber = (text: string, n: number) => new RegExp(`(^|[^0-9])${n}($|[^0-9])`).test(text);
 
+describe("search_cards: カードの行に URL を付けない", () => {
+  test("カードの行に https://index.gatcg.com/ が出ない", () => {
+    for (const args of [{ subtype: "SHENJU" }, { class: "MAGE" }] as Args[]) {
+      const out = run(args);
+      expect(out.isError).toBeFalsy();
+      expect(out.count).toBeGreaterThan(0);
+      expect(out.text).not.toContain("https://index.gatcg.com/");
+    }
+  });
+});
+
 describe("search_cards: 両面カードの裏面", () => {
   test("裏面にしか無いサブタイプ SHENJU で、裏面の 4 枚が表の slug を添えて出る", () => {
     const out = run({ subtype: "SHENJU" });

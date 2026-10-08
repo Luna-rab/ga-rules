@@ -56,3 +56,32 @@ test("「Terms」の定義 ID は [id](URL) の形で並ぶ", () => {
     "- Class Bonus: [keywords-and-abilities#Class Bonus](https://rules.gatcg.com/glossary/keywords#class-bonus) [game-mechanics-damage](https://rules.gatcg.com/game-mechanics/game-mechanics-damage)",
   );
 });
+
+test("カード名の見出しは ## 名前 (slug) (カード URL)、裏面の見出しは裏面自身の slug の URL", () => {
+  const back = { ...card, slug: "back-card", name: "Back Card", effectRaw: null };
+  const lines = renderCardDetail({ ...card, backFace: back }, urls).split("\n");
+  expect(lines[0]).toBe("## Test Card (test-card) (https://index.gatcg.com/card/test-card)");
+  expect(lines).toContain(
+    "### Back face: Back Card (back-card) (https://index.gatcg.com/card/back-card)",
+  );
+});
+
+test("カードに付いた裁定の行は [cite_id](カードの URL) の形", () => {
+  const out = renderCardDetail(
+    {
+      ...card,
+      rulings: [
+        {
+          citeId: "test-card#ruling:2025-01-02:1",
+          dateAdded: "2025-01-02",
+          title: "T",
+          description: "D",
+        },
+      ],
+    },
+    urls,
+  );
+  expect(out.split("\n")).toContain(
+    "[test-card#ruling:2025-01-02:1](https://index.gatcg.com/card/test-card) T (2025-01-02): D",
+  );
+});

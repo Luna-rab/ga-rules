@@ -117,6 +117,18 @@ describe("/mcp（実データの索引）", () => {
     expect(instructions.slice(0, 512)).toContain("get_game_overview");
   });
 
+  test("initialize の instructions は [ID](URL) の Markdown リンクで引用させ、ID だけの引用を指示しない", async () => {
+    const result = await call("initialize", {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "test", version: "0" },
+    });
+    const instructions = z.string().parse(result.instructions);
+    expect(instructions).toContain("[ID](URL)");
+    expect(instructions).toMatch(/Markdown link/i);
+    expect(instructions).not.toContain("Cite these IDs as sources.");
+  });
+
   test("Accept に text/event-stream が無ければ 406 を返す", async () => {
     const req = rpc("initialize");
     req.headers.set("Accept", "application/json");
