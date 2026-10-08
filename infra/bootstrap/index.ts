@@ -96,7 +96,12 @@ new gcp.billing.Budget(
     // 閾値に関係なく、集計が更新されるたび（1 日に数回）通知する。メールの宛先はそのまま残る。
     allUpdatesRule: { pubsubTopic: budgetTopic.id, schemaVersion: "1.0" },
   },
-  afterApis,
+  {
+    ...afterApis,
+    // 予算の API は呼び出し元の課金先を求める。人の認証（ADC）では、明示しないと gcloud 既定の
+    // Google のプロジェクトが使われ、403 で拒否される。
+    provider: new gcp.Provider("billing", { userProjectOverride: true, billingProject: project }),
+  },
 );
 
 const stopperSa = new gcp.serviceaccount.Account(
