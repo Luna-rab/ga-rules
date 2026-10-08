@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import type { ToolContext } from "../context";
 import { openTestContext } from "../testing";
+import { unrewrittenLinks } from "../tests/links";
 import { searchRules } from "./search-rules";
 
 const NameRow = z.object({ name: z.string() });
@@ -154,6 +155,15 @@ describe("search_rules: 公式サイトの URL", () => {
         url: z.object({ url: z.string() }).parse(row).url,
       });
     }
+  });
+});
+
+describe("search_rules: 抜粋に入ったリンク", () => {
+  // 抜粋（64 語で切る）の端でリンクが切れても、書き換わらない target は残らない。
+  test.each(["pantheon zone", "counters", "intent"])("%s の結果に未書き換えのリンクが無い", (q) => {
+    const out = call(q);
+    expect(out.isError).toBeFalsy();
+    expect(unrewrittenLinks(out.text)).toEqual([]);
   });
 });
 
