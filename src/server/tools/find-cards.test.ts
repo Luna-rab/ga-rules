@@ -14,6 +14,16 @@ const hasSlug = (line: string, slug: string) =>
 
 const hasNumber = (text: string, n: number) => new RegExp(`(^|[^0-9])${n}($|[^0-9])`).test(text);
 
+describe("find_cards: カードの行に URL を付けない", () => {
+  test("カードの行に https://index.gatcg.com/ が出ない", () => {
+    for (const name of ["Seiryuu", "Aella"]) {
+      const out = run(name);
+      expect(out.count).toBeGreaterThan(0);
+      expect(out.text).not.toContain("https://index.gatcg.com/");
+    }
+  });
+});
+
 describe("find_cards", () => {
   test("Seiryuu は両面カードの裏面 Seiryuu, Azure Dragon を、表の slug を添えて返す", () => {
     const line = linesOf(run("Seiryuu").text).find((l) => hasSlug(l, "seiryuu-azure-dragon"));

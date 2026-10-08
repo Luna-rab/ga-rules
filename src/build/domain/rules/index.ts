@@ -1,4 +1,5 @@
 import { HINT_EXAMPLE, HINT_EXCEPTION } from "../../../shared/hint";
+import { gitbookAnchor, rulesPageUrl, rulesSectionUrl } from "../../../shared/site-url";
 import type { Correction } from "../corrections";
 import { DataError } from "../errors";
 import type { Clause, LinkTarget, Page, RawPage, Section, SectionKind } from "../model";
@@ -8,6 +9,8 @@ type DraftSection = {
   heading: string;
   kind: SectionKind;
   anchorIds: string[];
+  // `####`・`###` の見出しの節だけ true。太字の節と lead 節はサイト上に anchor が無い
+  hasSiteAnchor: boolean;
   clauses: DraftClause[];
 };
 type DraftPage = {
@@ -93,15 +96,6 @@ function cleanHeading(raw: string): { heading: string; anchorIds: string[] } {
   return { heading, anchorIds };
 }
 
-// GitBook が見出しから作るアンカー: 小文字・記号除去・空白をハイフン
-function gitbookAnchor(heading: string): string {
-  return heading
-    .toLowerCase()
-    .replace(/[^a-z0-9 _-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-");
-}
-
 // --- ページ → 節 → 条文 ---
 
 const HINT_OPEN = /^\s*\{%\s*hint\b([^%]*)%\}\s*$/;
@@ -139,6 +133,7 @@ function splitPage(raw: RawPage): DraftPage {
       heading: title.split(" - ").at(-1)?.trim() ?? title,
       kind: "lead",
       anchorIds: [],
+      hasSiteAnchor: false,
       clauses: [],
     };
     sections.push(section);
@@ -157,8 +152,13 @@ function splitPage(raw: RawPage): DraftPage {
   let lastTop = 0;
   let afterHint = false;
   let shift = 0;
-  const startSection = (heading: string, kind: SectionKind, anchorIds: string[]): void => {
-    section = { heading, kind, anchorIds, clauses: [] };
+  const startSection = (
+    heading: string,
+    kind: SectionKind,
+    anchorIds: string[],
+    hasSiteAnchor: boolean,
+  ): void => {
+    section = { heading, kind, anchorIds, hasSiteAnchor, clauses: [] };
     sections.push(section);
     clause = null;
     stack = [];
@@ -180,7 +180,7 @@ function splitPage(raw: RawPage): DraftPage {
         shift = 0;
         continue;
       }
-      startSection(h.heading, heading[1] === "####" ? "heading" : "minor", h.anchorIds);
+      startSection(h.heading, heading[1] === "####" ? "heading" : "minor", h.anchorIds, true);
       continue;
     }
     const bold = /^\*\*([^*]+)\*\*(.*)$/.exec(line);
@@ -191,7 +191,7 @@ function splitPage(raw: RawPage): DraftPage {
       if (boldHeading === "") {
         afterHint = false;
         shift = 0;
-      } else startSection(boldHeading, "minor", []);
+      } else startSection(boldHeading, "minor", [], false);
       if (rest !== "") ensureClause().lines.push(rest);
       continue;
     }
@@ -297,6 +297,7 @@ function toRoman(n: number): string {
 function buildPage(d: DraftPage, resolver: LinkResolver): Page {
   const sectionIds = new Set<string>();
   const clauseIds = new Set<string>();
+  const url = rulesPageUrl(d.path);
   const sections: Section[] = d.sections.map((s) => {
     const sectionId = `${d.pageId}#${s.heading}`;
     if (sectionIds.has(sectionId)) throw new DataError(d.path, `節 ID が重なる: ${sectionId}`);
@@ -308,9 +309,17 @@ function buildPage(d: DraftPage, resolver: LinkResolver): Page {
       const { text, links } = resolver.rewrite(d.path, c.lines.join("\n"));
       return { clauseId, sectionId, number: c.number, text: stripMarkup(text), links };
     });
-    return { sectionId, pageId: d.pageId, heading: s.heading, kind: s.kind, clauses };
+    const anchor = s.hasSiteAnchor ? s.anchorIds[0] || gitbookAnchor(s.heading) : null;
+    return {
+      sectionId,
+      pageId: d.pageId,
+      heading: s.heading,
+      kind: s.kind,
+      url: rulesSectionUrl(url, anchor),
+      clauses,
+    };
   });
-  return { pageId: d.pageId, title: d.title, sections };
+  return { pageId: d.pageId, title: d.title, url, sections };
 }
 
 // --- リンクの解決と書き換え ---

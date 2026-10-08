@@ -60,14 +60,15 @@ function insertRows(
 ): void {
   const sections = pages.flatMap((p) => p.sections);
   const clauses = sections.flatMap((s) => s.clauses);
-  const titles = new Map(pages.map((p) => [p.pageId, p.title]));
+  const pageById = new Map(pages.map((p) => [p.pageId, p]));
 
   insert(
     schema.rulePage,
     // 親が子より先に並ぶよう position の順に書く（parent_page_id の外部キーのため）
     toc.map((e) => ({
       pageId: e.pageId,
-      title: titles.get(e.pageId) ?? "",
+      title: pageById.get(e.pageId)?.title ?? "",
+      url: pageById.get(e.pageId)?.url ?? "",
       parentPageId: e.parentPageId,
       position: e.position,
     })),
@@ -79,6 +80,7 @@ function insertRows(
         sectionId: s.sectionId,
         pageId: s.pageId,
         heading: s.heading,
+        url: s.url,
         position,
       })),
     ),

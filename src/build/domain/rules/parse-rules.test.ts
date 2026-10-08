@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Correction } from "../corrections";
 import { DataError } from "../errors";
-import type { Clause, Page, RawPage } from "../model";
+import type { Clause, Page, RawPage, Section } from "../model";
 import { parseRules } from "./index";
 
 function clauses(pages: Page[]): Clause[] {
@@ -865,5 +865,81 @@ describe("parseRules: rule-text の修正", () => {
     expect(thrown(() => parse([raw], [removeText(", as shown below", "q.md")])).message).toContain(
       "q.md",
     );
+  });
+});
+
+const urlOf = (x: Page | Section): string => x.url;
+
+function sectionUrl(pages: Page[], pageId: string, sectionId: string): string {
+  const s = page(pages, pageId).sections.find((x) => x.sectionId === sectionId);
+  if (!s) throw new Error(`節 ${sectionId} が無い`);
+  return s.url;
+}
+
+describe("parseRules: ページと節の URL", () => {
+  test("ページの URL は path から作り、#### の節は anchor 付き", () => {
+    const pages = parse([{ path: "a/p.md", markdown: "# P\n\n#### General Rules:\n\n1. X\n" }]);
+    expect(urlOf(page(pages, "p"))).toBe("https://rules.gatcg.com/a/p");
+    expect(sectionUrl(pages, "p", "p#General Rules")).toBe(
+      "https://rules.gatcg.com/a/p#general-rules",
+    );
+  });
+
+  test("見出しの <a id> を、見出しから作る anchor より優先する", () => {
+    const pages = parse([
+      { path: "a/p.md", markdown: '# P\n\n#### <a id="custom-id"></a>Sec\n\n1. X\n' },
+    ]);
+    expect(sectionUrl(pages, "p", "p#Sec")).toBe("https://rules.gatcg.com/a/p#custom-id");
+  });
+
+  test("### の節はページ URL + 見出しの anchor", () => {
+    const pages = parse([
+      { path: "a/p.md", markdown: "# P\n\n#### Major\n\n1. A\n\n### Minor Heading\n\n1. B\n" },
+    ]);
+    expect(sectionUrl(pages, "p", "p#Minor Heading")).toBe(
+      "https://rules.gatcg.com/a/p#minor-heading",
+    );
+  });
+
+  test("行頭の太字で始まる節は # なしのページ URL", () => {
+    const pages = parse([
+      {
+        path: "a/p.md",
+        markdown: "# P\n\n#### Major\n\n1. A\n\n**1.1 Announcing Activation**: X\n\n1. B\n",
+      },
+    ]);
+    expect(sectionUrl(pages, "p", "p#1.1 Announcing Activation")).toBe(
+      "https://rules.gatcg.com/a/p",
+    );
+  });
+
+  test("最初の見出しより前の本文(lead 節)は # なしのページ URL", () => {
+    const pages = parse([
+      { path: "a/p.md", markdown: "# P\n\nIntro text.\n\n#### Major\n\n1. A\n" },
+    ]);
+    const lead = page(pages, "p").sections.find((s) => s.kind === "lead");
+    if (!lead) throw new Error("lead 節が無い");
+    expect(urlOf(lead)).toBe("https://rules.gatcg.com/a/p");
+  });
+
+  test("README.md のページはディレクトリの URL で、節はその URL に anchor が付く", () => {
+    const pages = parse([{ path: "dir/README.md", markdown: "# D\n\n#### Sec Name\n\n1. X\n" }]);
+    expect(urlOf(page(pages, "dir"))).toBe("https://rules.gatcg.com/dir");
+    expect(sectionUrl(pages, "dir", "dir#Sec Name")).toBe("https://rules.gatcg.com/dir#sec-name");
+  });
+
+  test("ID の形と本文中のリンクの形は URL を足しても変わらない", () => {
+    const pages = parse([
+      { path: "g/game-terms.md", markdown: "# T\n\n#### Dies\n\n1. Dead.\n" },
+      {
+        path: "a/p.md",
+        markdown: "# P\n\n#### General Rules:\n\n1. See [d](../g/game-terms.md#dies).\n",
+      },
+    ]);
+    const c = clause(pages, "p#General Rules:1");
+    expect(c.sectionId).toBe("p#General Rules");
+    expect(c.text).toContain("[d](game-terms#Dies)");
+    expect(c.links).toEqual([{ pageId: "game-terms", sectionId: "game-terms#Dies" }]);
+    expect(page(pages, "p").pageId).toBe("p");
   });
 });

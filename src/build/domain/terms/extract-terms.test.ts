@@ -9,9 +9,17 @@ function page(pageId: string, title: string, headings: (string | [string, Sectio
   return {
     pageId,
     title,
+    url: `https://rules.gatcg.com/${pageId}`,
     sections: headings.map((h) => {
       const [heading, kind] = typeof h === "string" ? [h, "heading" as const] : h;
-      return { sectionId: `${pageId}#${heading}`, pageId, heading, kind, clauses: [] };
+      return {
+        sectionId: `${pageId}#${heading}`,
+        pageId,
+        heading,
+        kind,
+        url: `https://rules.gatcg.com/${pageId}`,
+        clauses: [],
+      };
     }),
   };
 }
@@ -255,12 +263,14 @@ describe("extractTerms", () => {
       {
         pageId: "game-terms",
         title: "Glossary - Game Terms",
+        url: "https://rules.gatcg.com/game-terms",
         sections: [
           {
             sectionId: labels,
             pageId: "game-terms",
             heading: "Label Keywords",
             kind: "heading",
+            url: "https://rules.gatcg.com/game-terms#label-keywords",
             clauses: [
               clause(labels, "3", "List of Label keywords:\n- Balance: ...\n- Deluge N: ..."),
             ],
@@ -270,12 +280,14 @@ describe("extractTerms", () => {
       {
         pageId: "card-types-functional-subtypes",
         title: "Card Types - Functional Subtypes",
+        url: "https://rules.gatcg.com/card-types-functional-subtypes",
         sections: [
           {
             sectionId: weapons,
             pageId: "card-types-functional-subtypes",
             heading: "Functional Weapons",
             kind: "heading",
+            url: "https://rules.gatcg.com/card-types-functional-subtypes#functional-weapons",
             clauses: [
               clause(weapons, "1", "Gun / Bow"),
               clause(weapons, "1.a", "Gun and Bow are functional weapon subtypes."),

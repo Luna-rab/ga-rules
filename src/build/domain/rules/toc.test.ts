@@ -5,7 +5,7 @@ import type { Page } from "../model";
 import { assertOverviewPages, parseToc } from "./toc";
 
 function pageOf(pageId: string): Page {
-  return { pageId, title: pageId, sections: [] };
+  return { pageId, title: pageId, url: `https://rules.gatcg.com/${pageId}`, sections: [] };
 }
 
 function thrown(fn: () => unknown): DataError {

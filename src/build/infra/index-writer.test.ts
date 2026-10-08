@@ -71,12 +71,14 @@ function data(relations: Partial<Relations> = {}): IndexData {
       {
         pageId: PAGE_ID,
         title: "Game Mechanics - Damage",
+        url: "https://rules.gatcg.com/game-mechanics/game-mechanics-damage",
         sections: [
           {
             sectionId: SECTION_ID,
             pageId: PAGE_ID,
             heading: "General Rules",
             kind: "heading",
+            url: "https://rules.gatcg.com/game-mechanics/game-mechanics-damage#general-rules",
             clauses: [
               {
                 clauseId: CLAUSE_ID,
@@ -136,6 +138,33 @@ async function rejection(p: Promise<unknown>): Promise<unknown> {
     (e: unknown) => e,
   );
 }
+
+describe("writeIndex: ページと節の URL", () => {
+  test("Page.url・Section.url がそのまま rule_page.url・rule_section.url に入る", async () => {
+    const base = data();
+    const page = base.pages[0];
+    const section = page?.sections[0];
+    if (!page || !section) throw new Error("fixture が空");
+    const withUrls: IndexData = {
+      ...base,
+      pages: [
+        {
+          ...page,
+          url: "https://rules.gatcg.com/dir/p",
+          sections: [{ ...section, url: "https://rules.gatcg.com/dir/p#general-rules" }],
+        },
+      ],
+    };
+    await writeIndex(outPath, withUrls);
+    const db = open();
+    expect(db.query("SELECT page_id, url FROM rule_page").all()).toEqual([
+      { page_id: PAGE_ID, url: "https://rules.gatcg.com/dir/p" },
+    ]);
+    expect(db.query("SELECT section_id, url FROM rule_section").all()).toEqual([
+      { section_id: SECTION_ID, url: "https://rules.gatcg.com/dir/p#general-rules" },
+    ]);
+  });
+});
 
 describe("writeIndex: 各テーブルの行", () => {
   test("ページ・節・条文・条文のリンクを書く", async () => {

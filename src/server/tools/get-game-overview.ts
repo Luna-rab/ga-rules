@@ -38,7 +38,10 @@ export const getGameOverview: ToolDefinition<z.ZodRawShape> = {
       ELEMENT_NOTE,
     ].join("\n");
     const excerpts = overview
-      .map((p) => `### ${p.title} (${p.pageId})\n\n${renderSections(p.sections)}`)
+      .map(
+        (p) =>
+          `### ${p.title} (${p.pageId})\n\n${renderSections(p.sections, ctx.catalog.ruleUrls)}`,
+      )
       .join("\n\n");
     const contents = toc.map((e) => `${"  ".repeat(e.depth)}${e.title} | ${e.pageId}`).join("\n");
 

@@ -1,7 +1,8 @@
 import { HINT_EXAMPLE, HINT_EXCEPTION } from "../../shared/hint";
+import { citeLink, rewriteRuleLinks, type RuleUrls } from "./rule-links";
 import { renderRuling, type RulingNode } from "./rulings";
 
-export type ClauseHit = { clauseId: string; pageTitle: string; text: string };
+export type ClauseHit = { clauseId: string; pageTitle: string; url: string; text: string };
 export type RulingHit = { ruling: RulingNode; cardCount: number; cardNames: string[] };
 
 function oneLine(s: string): string {
@@ -18,9 +19,24 @@ function clauseOneLine(text: string): string {
   return oneLine(lines.length > 0 ? lines.join("\n") : text);
 }
 
-export function renderSearchRules(clauses: ClauseHit[], rulings: RulingHit[]): string {
+// 抜粋は read/search.ts が端のリンクを丸ごと入れるので、ここは全文に抜粋が見つからなかったときの保険。
+// 切れたリンクの残り（書き換えられない `](target)` と、閉じない `[`）を、文言だけにする。
+// 末尾が `...` の抜粋の閉じない `[` は、条文が引用するカード名の `[Flawless` なので外さない。
+function dropCutLinks(excerpt: string): string {
+  const cut = excerpt
+    .replace(/^(\.\.\.)?([^[\]]*)\]\((?!https?:\/\/)(?:[^()]|\([^()]*\))*\)/, "$1$2")
+    .replace(/\[([^[\]]*)\]\((?!https?:\/\/)(?:[^()[\]]|\([^()[\]]*\))*(?:\([^()[\]]*)?$/, "$1...");
+  return cut.endsWith("...") ? cut : cut.replace(/\[([^\]]*)$/, "$1");
+}
+
+export function renderSearchRules(
+  clauses: ClauseHit[],
+  rulings: RulingHit[],
+  urls: RuleUrls,
+): string {
   const clauseLines = clauses.map(
-    (c) => `- [${c.clauseId}] (${c.pageTitle}) ${clauseOneLine(c.text)}`,
+    (c) =>
+      `- ${citeLink(c.clauseId, c.url)} (${c.pageTitle}) ${dropCutLinks(clauseOneLine(rewriteRuleLinks(c.text, urls)))}`,
   );
   const rulingLines = rulings.map((r) => {
     const names = r.cardNames.join(", ");

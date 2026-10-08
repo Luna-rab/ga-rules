@@ -14,6 +14,7 @@ import {
 export const rulePage = sqliteTable("rule_page", {
   pageId: text("page_id").primaryKey(),
   title: text("title").notNull(),
+  url: text("url").notNull(),
   // 目次の親。最上位は NULL
   parentPageId: text("parent_page_id").references((): AnySQLiteColumn => rulePage.pageId),
   position: integer("position").notNull(),
@@ -25,6 +26,7 @@ export const ruleSection = sqliteTable("rule_section", {
     .notNull()
     .references(() => rulePage.pageId),
   heading: text("heading").notNull(),
+  url: text("url").notNull(),
   position: integer("position").notNull(),
 });
 

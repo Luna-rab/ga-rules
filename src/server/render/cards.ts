@@ -1,4 +1,6 @@
-import { type ClauseNode, renderClause } from "./clauses";
+import { cardUrl } from "../../shared/site-url";
+import type { ClauseNode } from "./clauses";
+import { citeLink, rewriteRuleLinks, type RuleUrls } from "./rule-links";
 import { type RulingNode, renderRuling } from "./rulings";
 
 export type CardCost = { type: string | null; value: string | null };
@@ -30,7 +32,7 @@ export type CardDetail = CardSummary & {
   // definitionIds は用語の定義の引用 ID（節 ID、ページ全体ならページ ID）
   terms: { name: string; definitionIds: string[] }[];
   references: { slug: string; name: string; kind: string }[];
-  clauses: ClauseNode[];
+  clauses: (ClauseNode & { url: string })[];
   otherRulings: RulingNode[];
 };
 
@@ -84,13 +86,13 @@ function section(heading: string, lines: string[]): string[] {
   return lines.length > 0 ? ["", `### ${heading}`, ...lines] : [];
 }
 
-export function renderCardDetail(c: CardDetail): string {
+export function renderCardDetail(c: CardDetail, urls: RuleUrls): string {
   const legality = c.legality
     ? Object.entries(c.legality).map(([f, limit]) => `${f} limit ${limit ?? "none"}`)
     : [];
   const front = c.frontFace;
   return [
-    `## ${c.name} (${c.slug})`,
+    `## ${c.name} (${c.slug}) (${cardUrl(c.slug)})`,
     ...(front ? [`- Back face of: ${front.name} (${front.slug})`] : []),
     ...faceFields(c),
     ...field("Legality", legality),
@@ -98,7 +100,7 @@ export function renderCardDetail(c: CardDetail): string {
     ...(c.backFace
       ? [
           "",
-          `### Back face: ${c.backFace.name} (${c.backFace.slug})`,
+          `### Back face: ${c.backFace.name} (${c.backFace.slug}) (${cardUrl(c.backFace.slug)})`,
           ...faceFields(c.backFace),
           ...(c.backFace.effectRaw ? ["- Effect:", c.backFace.effectRaw] : []),
         ]
@@ -109,13 +111,18 @@ export function renderCardDetail(c: CardDetail): string {
     ),
     ...section(
       "Terms",
-      c.terms.map((t) => `- ${t.name}: ${t.definitionIds.map((id) => `[${id}]`).join(" ")}`),
+      c.terms.map(
+        (t) => `- ${t.name}: ${t.definitionIds.map((id) => citeLink(id, urls.get(id))).join(" ")}`,
+      ),
     ),
     ...section(
       "Referenced cards",
       c.references.map((r) => `- ${r.name} (${r.slug}) — ${r.kind}`),
     ),
-    ...section("Rules clauses that mention this card", c.clauses.map(renderClause)),
+    ...section(
+      "Rules clauses that mention this card",
+      c.clauses.map((cl) => `${citeLink(cl.clauseId, cl.url)} ${rewriteRuleLinks(cl.text, urls)}`),
+    ),
     ...section("Rulings on other cards that mention this card", c.otherRulings.map(renderRuling)),
   ].join("\n");
 }

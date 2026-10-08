@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { ToolContext } from "../context";
 import { openTestContext } from "../testing";
 import { getRulesPage } from "./get-rules-page";
+import { unrewrittenLinks } from "../tests/links";
 
 const ClauseRow = z.object({ clause_id: z.string(), text: z.string() });
 
@@ -117,5 +118,77 @@ describe("get_rules_page: 呼び方の誤り", () => {
     expect(out.text).toContain("get_game_overview");
     expect(out.text).toContain("search_rules");
     expect(out.count).toBe(0);
+  });
+});
+
+const UrlRow = z.object({ url: z.string() });
+const urlOf = (table: "rule_page" | "rule_section", column: string, id: string): string =>
+  UrlRow.parse(ctx.db.query(`SELECT url FROM ${table} WHERE ${column} = ?`).get(id)).url;
+
+describe("get_rules_page: 公式サイトの URL", () => {
+  test("節の見出しに、その節の URL が 1 回付く", () => {
+    const out = call("playing-cards-resolution");
+    const url =
+      "https://rules.gatcg.com/game-mechanics/game-mechanics-playing-cards/playing-cards-resolution#general-rules";
+    expect(out.text).toContain(`#### General Rules (${url})`);
+    expect(out.text.split(url)).toHaveLength(2);
+  });
+
+  test("どの節の見出しも、索引の節の URL が付く。条文の行には URL が付かない", () => {
+    const pageId = "game-mechanics-counters";
+    const out = call(pageId);
+    const sections = ctx.db
+      .query("SELECT section_id, heading, url FROM rule_section WHERE page_id = ?")
+      .all(pageId)
+      .map((r) =>
+        z.object({ section_id: z.string(), heading: z.string(), url: z.string() }).parse(r),
+      );
+    expect(sections.length).toBeGreaterThan(1);
+    for (const s of sections) expect(out.text).toContain(`#### ${s.heading} (${s.url})`);
+    const clauseLines = out.text.split("\n").filter((l) => /^\[[^\]]+:\d/.test(l));
+    expect(clauseLines.length).toBeGreaterThan(0);
+    for (const l of clauseLines) expect(l).toMatch(/^\[[^\]]+\] (?!\(?https:)/);
+  });
+
+  test("README.md のページは、ディレクトリの URL が節の URL の元になる", () => {
+    const url = urlOf("rule_page", "page_id", "general-rules-parts-of-a-card");
+    expect(url).toBe("https://rules.gatcg.com/general-rules/general-rules-parts-of-a-card");
+    const out = call("general-rules-parts-of-a-card");
+    expect(out.text).toMatch(
+      /#### .+ \(https:\/\/rules\.gatcg\.com\/general-rules\/general-rules-parts-of-a-card(#[^)]*)?\)/,
+    );
+  });
+
+  test("本文のページへのリンクは [文言](URL) [target] に書き換わる", () => {
+    const out = call("parts-of-a-card-stats");
+    const damage = urlOf("rule_page", "page_id", "game-mechanics-damage");
+    expect(out.text).toContain(`[damage](${damage}) [game-mechanics-damage]`);
+    expect(unrewrittenLinks(out.text)).toEqual([]);
+  });
+
+  test("節見出しへのリンクは、target 全体を [] に残す", () => {
+    const out = call("abilities-resolving-triggered-and-activated-abilities");
+    const target = "playing-cards-resolution#General Rules";
+    const url = urlOf("rule_section", "section_id", target);
+    expect(out.text).toMatch(
+      new RegExp(`\\]\\(${url.replace(/[.#]/g, "\\$&")}\\) \\[${target}\\]`),
+    );
+    expect(unrewrittenLinks(out.text)).toEqual([]);
+  });
+
+  test("括弧を含む節見出しへのリンクも書き換わる", () => {
+    const out = call("parts-of-a-card-element");
+    const url = urlOf("rule_section", "section_id", "game-terms#Lineage (term)");
+    expect(out.text).toContain(`[Lineage](${url}) [game-terms#Lineage (term)]`);
+  });
+
+  test("用語集のページは、条文を載せる節の見出しにも URL が付く", () => {
+    const out = call("keywords-and-abilities");
+    const url = urlOf(
+      "rule_section",
+      "section_id",
+      "keywords-and-abilities#Keywords and Abilities",
+    );
+    expect(out.text).toContain(`#### Keywords and Abilities (${url})`);
   });
 });

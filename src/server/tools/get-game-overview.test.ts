@@ -4,7 +4,9 @@ import { OVERVIEW_PAGE_IDS } from "../../shared/overview";
 import type { ToolContext } from "../context";
 import { findTerms } from "../lookup/glossary";
 import { ELEMENTS } from "../overview-text";
+import { rewriteRuleLinks } from "../render/rule-links";
 import { openTestContext } from "../testing";
+import { unrewrittenLinks } from "../tests/links";
 import { getGameOverview } from "./get-game-overview";
 
 const PageRow = z.object({
@@ -99,7 +101,8 @@ describe("get_game_overview", () => {
         const head = `[${c.clause_id}] `;
         const at = lines.findIndex((l, i) => i > prev && l.trimStart().startsWith(head));
         expect({ id: c.clause_id, found: at >= 0 }).toEqual({ id: c.clause_id, found: true });
-        expect(lines[at]).toContain(c.text.split("\n")[0] ?? "");
+        const rewritten = rewriteRuleLinks(c.text, ctx.catalog.ruleUrls);
+        expect(lines[at]).toContain(rewritten.split("\n")[0] ?? "");
         prev = at;
       }
       // このページの先頭の条文は、前のページの末尾より後ろにある
@@ -107,6 +110,23 @@ describe("get_game_overview", () => {
       expect(first).toBeGreaterThanOrEqual(from);
       from = prev;
     }
+  });
+
+  test("概要の 5 ページの節の見出しに、索引の節の URL が付く", () => {
+    for (const pageId of OVERVIEW_PAGE_IDS) {
+      const sections = ctx.db
+        .query("SELECT heading, url FROM rule_section WHERE page_id = ?")
+        .all(pageId)
+        .map((r) => z.object({ heading: z.string(), url: z.string() }).parse(r));
+      expect(sections.length).toBeGreaterThan(0);
+      for (const s of sections) expect(out.text).toContain(`#### ${s.heading} (${s.url})`);
+    }
+  });
+
+  test("抜粋の本文のページへのリンクは書き換わる", () => {
+    const excerpts = out.text.slice(out.text.indexOf("## Rules excerpts"));
+    expect(excerpts).toMatch(/\]\(https:\/\/rules\.gatcg\.com\/[^)\n]*\) \[[^\]\n]+\]/);
+    expect(unrewrittenLinks(excerpts)).toEqual([]);
   });
 
   test("目次は rule_page.position の順で、子の行は親の行より深く字下げされる", () => {

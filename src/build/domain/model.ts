@@ -17,9 +17,10 @@ export type Section = {
   pageId: string;
   heading: string;
   kind: SectionKind;
+  url: string; // rules.gatcg.com 上の URL。anchor の無い節（太字・lead）はページ URL
   clauses: Clause[];
 };
-export type Page = { pageId: string; title: string; sections: Section[] };
+export type Page = { pageId: string; title: string; url: string; sections: Section[] };
 export type TocEntry = { pageId: string; parentPageId: string | null; position: number };
 
 // data/cards/<slug>.json と同じ形（列名もそのまま）

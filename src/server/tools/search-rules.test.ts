@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import type { ToolContext } from "../context";
 import { openTestContext } from "../testing";
+import { unrewrittenLinks } from "../tests/links";
 import { searchRules } from "./search-rules";
 
 const NameRow = z.object({ name: z.string() });
@@ -54,6 +55,13 @@ describe("search_rules: 裁定", () => {
     const shown = names.filter((n) => out.text.includes(n));
     expect(shown.length).toBeGreaterThanOrEqual(1);
     expect(shown.length).toBeLessThanOrEqual(3);
+  });
+
+  test("裁定の行は - [cite_id](https://index.gatcg.com/card/<slug>) タイトル (日付): 本文 の形", () => {
+    const at = lines.findIndex((l) => l.includes(OMEN));
+    expect(lines[at]).toMatch(
+      /^\s*- \[([^\]]+)#ruling:[^\]]+\]\(https:\/\/index\.gatcg\.com\/card\/\1\) .* \(\d{4}-\d{2}-\d{2}\): /,
+    );
   });
 
   test("その文面の行は [引用 ID] で始まる", () => {
@@ -125,6 +133,46 @@ function lineOf(query: string, clauseId: string): string {
   if (!line) throw new Error(`${query} の結果に ${clauseId} が無い`);
   return line;
 }
+
+describe("search_rules: 公式サイトの URL", () => {
+  const out = call("activate ability during opponent turn");
+  const clauseLines = out.text
+    .split("\n")
+    .filter((l) => /^- \[[^\]]+\]/.test(l) && !l.includes("#ruling:"));
+
+  test("条文の各行は - [clause_id](https://rules.gatcg.com/...) ( で始まる", () => {
+    expect(clauseLines.length).toBeGreaterThan(0);
+    for (const l of clauseLines) {
+      expect(l).toMatch(/^- \[[^\]]+\]\(https:\/\/rules\.gatcg\.com\/[^)\s]*\) \(/);
+    }
+  });
+
+  test("行の URL は、条文が属する節の URL", () => {
+    for (const l of clauseLines) {
+      const m = /^- \[([^\]]+)\]\(([^)]+)\) \(/.exec(l);
+      const clauseId = m?.[1] ?? "";
+      const row = ctx.db
+        .query(
+          `SELECT s.url FROM rule_clause c JOIN rule_section s ON s.section_id = c.section_id
+           WHERE c.clause_id = ?`,
+        )
+        .get(clauseId);
+      expect({ clauseId, url: m?.[2] }).toEqual({
+        clauseId,
+        url: z.object({ url: z.string() }).parse(row).url,
+      });
+    }
+  });
+});
+
+describe("search_rules: 抜粋に入ったリンク", () => {
+  // 抜粋（64 語で切る）の端でリンクが切れても、書き換わらない target は残らない。
+  test.each(["pantheon zone", "counters", "intent"])("%s の結果に未書き換えのリンクが無い", (q) => {
+    const out = call(q);
+    expect(out.isError).toBeFalsy();
+    expect(unrewrittenLinks(out.text)).toEqual([]);
+  });
+});
 
 describe("search_rules: 条文の hint", () => {
   test("「Example:」の hint は 1 行表示から外れる", () => {

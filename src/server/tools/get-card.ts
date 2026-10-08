@@ -29,6 +29,9 @@ export const getCard: ToolDefinition<{ slugs: z.ZodArray<z.ZodString> }> = {
       };
     }
     const found = cards.filter((c) => c !== null);
-    return { text: found.map(renderCardDetail).join("\n\n---\n\n"), count: found.length };
+    return {
+      text: found.map((c) => renderCardDetail(c, ctx.catalog.ruleUrls)).join("\n\n---\n\n"),
+      count: found.length,
+    };
   },
 };

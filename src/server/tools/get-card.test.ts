@@ -5,7 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { openContext, type ToolContext } from "../context";
+import { rewriteRuleLinks } from "../render/rule-links";
 import { openTestContext } from "../testing";
+import { unrewrittenLinks } from "../tests/links";
 import { getCard } from "./get-card";
 
 const ctx: ToolContext = openTestContext();
@@ -39,7 +41,9 @@ const StoredRow = z.object({
 describe("get_card: 両面カード", () => {
   test("表の slug では、裏面の名前・種別・ステータス・効果テキストも返す", () => {
     const out = run(["fabled-azurite-fatestone"]);
-    expect(out.text).toContain("### Back face: Seiryuu, Azure Dragon (seiryuu-azure-dragon)");
+    expect(out.text).toContain(
+      "### Back face: Seiryuu, Azure Dragon (seiryuu-azure-dragon) (https://index.gatcg.com/card/seiryuu-azure-dragon)",
+    );
     expect(out.text).toContain("- Types: ALLY");
     expect(out.text).toContain("cost reserve 10, power 4, life 12");
     expect(out.text).toContain("Empower X+2");
@@ -84,6 +88,45 @@ describe("get_card: 両面カード", () => {
   });
 });
 
+describe("get_card: カードと裁定の URL", () => {
+  const FRONT = "https://index.gatcg.com/card/fabled-azurite-fatestone";
+  const BACK = "https://index.gatcg.com/card/seiryuu-azure-dragon";
+  const RULING = "fabled-azurite-fatestone#ruling:2025-03-02:3";
+
+  test("表の slug では、先頭行がカード名・slug・表の URL、裏面の見出しは裏面自身の URL", () => {
+    const lines = run(["fabled-azurite-fatestone"]).text.split("\n");
+    expect(lines[0]).toBe(`## Fabled Azurite Fatestone (fabled-azurite-fatestone) (${FRONT})`);
+    expect(lines).toContain(
+      `### Back face: Seiryuu, Azure Dragon (seiryuu-azure-dragon) (${BACK})`,
+    );
+  });
+
+  test("裏面の slug では、先頭の見出しが裏面自身の URL で、表に付いた裁定は表の URL", () => {
+    const lines = run(["seiryuu-azure-dragon"]).text.split("\n");
+    expect(lines[0]).toBe(`## Seiryuu, Azure Dragon (seiryuu-azure-dragon) (${BACK})`);
+    const ruling = lines.find((l) => l.startsWith(`[${RULING}]`));
+    expect(ruling).toStartWith(`[${RULING}](${FRONT}) `);
+    expect(lines.some((l) => l.includes(FRONT) && l.startsWith("##"))).toBe(false);
+  });
+
+  test("通常のカードの先頭行は ## 名前 (slug) (カード URL)、裁定の行は表の URL を付ける", () => {
+    const out = run(["beguiling-coup"]);
+    expect(out.text.split("\n")[0]).toBe(
+      "## Beguiling Coup (beguiling-coup) (https://index.gatcg.com/card/beguiling-coup)",
+    );
+    expect(out.text).toContain(
+      "[beguiling-coup#ruling:2025-07-18:1](https://index.gatcg.com/card/beguiling-coup) ",
+    );
+  });
+
+  test("他のカードの裁定は、その裁定が付いたカードの URL を付ける", () => {
+    const out = run(["nullifying-lantern"]);
+    expect(out.text).toContain(
+      "[censer-of-restful-peace#ruling:2025-03-02:1](https://index.gatcg.com/card/censer-of-restful-peace) ",
+    );
+  });
+});
+
 describe("get_card", () => {
   test("Beguiling Coup は裁定 3 件を引用 ID と文面つきで、効果テキストとともに返す", () => {
     const out = run(["beguiling-coup"]);
@@ -114,20 +157,38 @@ describe("get_card", () => {
     const out = run(["divine-comedy"]);
     expect(out.isError).toBeFalsy();
     expect(out.text).toContain("[game-mechanics-mastery#Divine Comedy:1]");
+    expect(out.text.split("\n")).toContainEqual(
+      expect.stringMatching(
+        /^\[game-mechanics-mastery#Divine Comedy:1\]\(https:\/\/rules\.gatcg\.com\/[^)\s]*\) Divine Comedy is a Mage/,
+      ),
+    );
     const clauses = ctx.db
       .query(
-        `SELECT c.clause_id, c.text FROM clause_card cc JOIN rule_clause c ON c.clause_id = cc.clause_id
+        `SELECT c.clause_id, c.text, s.url FROM clause_card cc
+         JOIN rule_clause c ON c.clause_id = cc.clause_id
+         JOIN rule_section s ON s.section_id = c.section_id
          WHERE cc.card_slug = 'divine-comedy'`,
       )
       .all()
-      .map((r) => ClauseRow.parse(r));
+      .map((r) => ClauseRow.extend({ url: z.string() }).parse(r));
     expect(clauses.length).toBeGreaterThan(0);
     for (const c of clauses) {
-      expect(out.text).toContain(`[${c.clause_id}]`);
-      for (const line of c.text.split("\n").filter((l) => l.trim() !== "")) {
+      expect(out.text).toContain(`[${c.clause_id}](${c.url}) `);
+      const text = rewriteRuleLinks(c.text, ctx.catalog.ruleUrls);
+      for (const line of text.split("\n").filter((l) => l.trim() !== "")) {
         expect(out.text).toContain(line.trim());
       }
     }
+  });
+
+  test("Divine Comedy の条文の本文のリンクは [文言](URL) [target] に書き換わる", () => {
+    const out = run(["divine-comedy"]);
+    const row = ctx.db
+      .query("SELECT url FROM rule_section WHERE section_id = 'keywords-and-abilities#Cascade'")
+      .get();
+    const url = z.object({ url: z.string() }).parse(row).url;
+    expect(out.text).toContain(`[cascades](${url}) [keywords-and-abilities#Cascade]`);
+    expect(unrewrittenLinks(out.text)).toEqual([]);
   });
 
   test("カードに結んだ用語を、名前と定義の引用 ID つきで返す", () => {
@@ -143,10 +204,18 @@ describe("get_card", () => {
       .map((r) => TermRow.parse(r));
     expect(terms.map((t) => t.name)).toContain("Class Bonus");
     for (const t of terms) {
+      const id = t.section_id ?? t.page_id;
+      const row =
+        t.section_id === null
+          ? ctx.db.query("SELECT url FROM rule_page WHERE page_id = ?").get(t.page_id)
+          : ctx.db.query("SELECT url FROM rule_section WHERE section_id = ?").get(t.section_id);
+      const url = z.object({ url: z.string() }).parse(row).url;
       expect(out.text).toContain(t.name);
-      expect(out.text).toContain(t.section_id ?? t.page_id);
+      expect(out.text).toContain(`[${id}](${url})`);
     }
-    expect(out.text).toContain("keywords-and-abilities#Class Bonus");
+    expect(out.text).toMatch(
+      /\[keywords-and-abilities#Class Bonus\]\(https:\/\/rules\.gatcg\.com\/[^)\s]*\)/,
+    );
   });
 
   test("参照先カードの名前・slug・種類を返す", () => {

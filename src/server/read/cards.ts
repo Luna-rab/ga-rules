@@ -235,7 +235,7 @@ export function readCardDetail(db: Database, slug: string): CardDetail | null {
     .all();
 
   const clauses = d
-    .select({ clauseId: ruleClause.clauseId, text: ruleClause.text })
+    .select({ clauseId: ruleClause.clauseId, text: ruleClause.text, url: ruleSection.url })
     .from(clauseCard)
     .innerJoin(ruleClause, eq(ruleClause.clauseId, clauseCard.clauseId))
     .innerJoin(ruleSection, eq(ruleSection.sectionId, ruleClause.sectionId))

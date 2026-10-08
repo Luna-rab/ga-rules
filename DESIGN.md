@@ -261,6 +261,7 @@ flowchart LR
    - リンクの文字列の前後の空白はリンクの外に出す（`[Loaded Cards ](...)zone` → `[Loaded Cards](...) zone`）。文字列がファイル名のリンク（GitBook のページへの mention、`[game-terms.md](...)`）は、文字列をリンク先のページ題にする。
 7. ページ・節・条文に並び順（`position`）を振る。ページの順と親子は目次 `SUMMARY.md` の入れ子から取り、`rule_page.parent_page_id` に持つ。`get_game_overview` の目次と、`get_rules_page` が条文からページを組み立て直すのに使う。条文の番号を文字列で並べると `10` が `2` より前に来るので、番号では並べない。
 8. ページの原文は持たない。`get_rules_page` は条文から組み立て直し、条文ごとに引用 ID を付けて返す。原文の行は、手順 3 で捨てるものを除いてすべて条文か節の見出しに入る（太字の小見出し `**1.1 Announcing Activation**` も節になる）ことを全 108 ページで確かめた。
+   - ページと節に公式サイト（rules.gatcg.com）の URL を作り、`rule_page.url`・`rule_section.url` に持つ。ページは `data/rules` のパスから `.md` を外したもの（`.../README.md` はディレクトリのパス）。`####`・`###` の節はページ URL + `#anchor`（見出しの `<a id>` の先頭、無ければ `gitbookAnchor(見出し)`）。太字の小見出しの節と、最初の見出しより前の lead 節は、サイト上にこれらの anchor が無いので `#` なしのページ URL にする。条文は属する節の URL を使う。組み立ては `src/shared/site-url.ts`。
 9. 概要に抜き出す 5 ページ（「最初に渡すゲームの概要」）のどれかが無ければビルドを止める。
 
 ### カードの取り込み
@@ -367,6 +368,7 @@ erDiagram
     rule_page {
         text page_id PK "例 game-mechanics-damage"
         text title
+        text url "rules.gatcg.com 上の URL"
         text parent_page_id FK "目次の親。最上位なら NULL"
         int position "目次の中の順番"
     }
@@ -374,6 +376,7 @@ erDiagram
         text section_id PK "例 game-mechanics-damage#General Rules"
         text page_id FK
         text heading
+        text url "ページ URL + #anchor。太字の節・lead 節は anchor が無くページ URL"
         int position "ページの中の順番"
     }
     rule_clause {
@@ -443,6 +446,16 @@ graph DB は使わない。参照は最大 2 ホップで閉路が無く、結�
 
 - 戻り値は `content` の Markdown のテキスト 1 つ。`structuredContent` は使わない。モデルに確実に届くのはテキストで、JSON にするとキー名が件数ぶん繰り返されて 1.5〜2 倍に膨らむ。
 - すべての条文・裁定に `[引用ID]` を前置する。ID の組み立てをモデルに任せると、組み立て違いがそのまま出典になる。
+- ルールの URL は引用 ID の代わりではなく、横に並べる。モデルが `[ID](URL)` と書けば、利用者は原文を開ける。
+  - 節の見出しは `#### 見出し (URL)` と 1 回だけ付ける。条文の行は `[clause_id] 本文` のままにする。条文の URL は節の URL と同じで、条文ごとに繰り返すと増えるだけだから。
+  - `search_rules` の条文と `get_card` の条文・用語は、節の見出しが無いので `[ID](URL)` の形にする。URL が引けなければ `[ID]` のまま出す。
+  - 太字の節と lead 節の URL は `#` なしのページ URL。サイト上にこれらの anchor が無く、作った anchor はページの先頭に飛ぶだけだから。
+  - 条文の本文にあるページへのリンクは、DB には `[文言](pageId#節見出し)` のまま持ち、表示のときに `[文言](URL) [pageId#節見出し]` に書き換える（`rewriteRuleLinks`）。`search_rules` の本文は FTS5 の抜粋で、端がリンクの途中ならリンクが丸ごと入るまで抜粋を広げてから書き換える。
+- カードと裁定の URL は `https://index.gatcg.com/card/<slug>`（`cardUrl`、`src/shared/site-url.ts`）。
+  - 裁定の URL は、cite_id の `#ruling:` より前の slug から作る（`rulingUrl`）。裁定の行は `[cite_id](URL) 題 (日付): 本文`。裏面の slug で `get_card` を呼んでも、裁定は表のカードに付いているので表の slug の URL になる。
+  - `get_card` のカード名の見出しは `## 名前 (slug) (URL)`、裏面の見出しは `### Back face: 名前 (slug) (URL)` と、それぞれ自分の slug の URL を付ける。
+  - `search_cards`・`find_cards` のカードの行には URL を付けない。1 行が長くなるだけで、詳しく見るなら `get_card` を呼ぶから。
+- モデルへの指示（`initialize` の `instructions`）は、出典を `[ID](URL)` の Markdown リンクで書かせ、条文の行に URL が無いとき（`get_rules_page`・`get_term` など）は、その条文が入っている節の見出し `#### 見出し (URL)` の URL を使わせる。どこにも URL が出ていない ID は `[ID]` のまま書かせる。
 - 呼び方の誤り（存在しない ID・slug・属性の値、引数が 1 つも無い）は `isError: true` にして、直し方を書く。モデルは呼び直す。
 - 呼び方は正しく該当が無いだけなら、`isError` にせず「該当なし」だけを返す。推測の材料は付けない。言い換えての呼び直しを繰り返させず、利用者に「見つからない」と伝えさせる。
 - 変更履歴の `README.md`（8,738 トークン）はどのツールからも返さない。
