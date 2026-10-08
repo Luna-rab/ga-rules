@@ -19,12 +19,14 @@ function clauseOneLine(text: string): string {
   return oneLine(lines.length > 0 ? lines.join("\n") : text);
 }
 
-// snippet が端で切ったリンクの残り（書き換えられない `](target)` と、閉じない `[`）を、文言だけにする
+// 抜粋は read/search.ts が端のリンクを丸ごと入れるので、ここは全文に抜粋が見つからなかったときの保険。
+// 切れたリンクの残り（書き換えられない `](target)` と、閉じない `[`）を、文言だけにする。
+// 末尾が `...` の抜粋の閉じない `[` は、条文が引用するカード名の `[Flawless` なので外さない。
 function dropCutLinks(excerpt: string): string {
-  return excerpt
+  const cut = excerpt
     .replace(/^(\.\.\.)?([^[\]]*)\]\((?!https?:\/\/)(?:[^()]|\([^()]*\))*\)/, "$1$2")
-    .replace(/\[([^[\]]*)\]\((?!https?:\/\/)(?:[^()[\]]|\([^()[\]]*\))*(?:\([^()[\]]*)?$/, "$1...")
-    .replace(/\[([^\]]*)$/, "$1");
+    .replace(/\[([^[\]]*)\]\((?!https?:\/\/)(?:[^()[\]]|\([^()[\]]*\))*(?:\([^()[\]]*)?$/, "$1...");
+  return cut.endsWith("...") ? cut : cut.replace(/\[([^\]]*)$/, "$1");
 }
 
 export function renderSearchRules(
