@@ -3,7 +3,14 @@ import { asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { z } from "zod";
 import { OVERVIEW_PAGE_IDS } from "../../shared/overview";
-import { card, rulePage, term, termAlias, termDefinition } from "../../shared/db/schema";
+import {
+  card,
+  rulePage,
+  ruleSection,
+  term,
+  termAlias,
+  termDefinition,
+} from "../../shared/db/schema";
 import type { RuleUrls } from "../render/rule-links";
 import { type PageNode, readPage } from "./pages";
 
@@ -56,6 +63,15 @@ export function loadCatalog(db: Database): Catalog {
     depthOf.set(p.pageId, depth);
     return { pageId: p.pageId, title: p.title, parentPageId: p.parentPageId, depth };
   });
+
+  const ruleUrls = new Map<string, string>();
+  for (const p of pages) ruleUrls.set(p.pageId, p.url);
+  for (const s of d
+    .select({ id: ruleSection.sectionId, url: ruleSection.url })
+    .from(ruleSection)
+    .all()) {
+    ruleUrls.set(s.id, s.url);
+  }
 
   const overview = OVERVIEW_PAGE_IDS.map((id) => {
     const page = readPage(db, id);
@@ -122,7 +138,7 @@ export function loadCatalog(db: Database): Catalog {
     overview,
     terms,
     cards: cardRows.map((c) => ({ slug: c.slug, name: c.name })),
-    ruleUrls: new Map(),
+    ruleUrls,
     attributes: {
       types: distinctSorted(sets.types),
       subtypes: distinctSorted(sets.subtypes),

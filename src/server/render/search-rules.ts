@@ -1,5 +1,5 @@
 import { HINT_EXAMPLE, HINT_EXCEPTION } from "../../shared/hint";
-import type { RuleUrls } from "./rule-links";
+import { citeLink, rewriteRuleLinks, type RuleUrls } from "./rule-links";
 import { renderRuling, type RulingNode } from "./rulings";
 
 export type ClauseHit = { clauseId: string; pageTitle: string; url: string; text: string };
@@ -22,10 +22,11 @@ function clauseOneLine(text: string): string {
 export function renderSearchRules(
   clauses: ClauseHit[],
   rulings: RulingHit[],
-  _urls: RuleUrls,
+  urls: RuleUrls,
 ): string {
   const clauseLines = clauses.map(
-    (c) => `- [${c.clauseId}] (${c.pageTitle}) ${clauseOneLine(c.text)}`,
+    (c) =>
+      `- ${citeLink(c.clauseId, c.url)} (${c.pageTitle}) ${clauseOneLine(rewriteRuleLinks(c.text, urls))}`,
   );
   const rulingLines = rulings.map((r) => {
     const names = r.cardNames.join(", ");

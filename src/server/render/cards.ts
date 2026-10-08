@@ -1,5 +1,5 @@
-import { type ClauseNode, renderClause } from "./clauses";
-import type { RuleUrls } from "./rule-links";
+import type { ClauseNode } from "./clauses";
+import { citeLink, rewriteRuleLinks, type RuleUrls } from "./rule-links";
 import { type RulingNode, renderRuling } from "./rulings";
 
 export type CardCost = { type: string | null; value: string | null };
@@ -85,7 +85,7 @@ function section(heading: string, lines: string[]): string[] {
   return lines.length > 0 ? ["", `### ${heading}`, ...lines] : [];
 }
 
-export function renderCardDetail(c: CardDetail, _urls: RuleUrls): string {
+export function renderCardDetail(c: CardDetail, urls: RuleUrls): string {
   const legality = c.legality
     ? Object.entries(c.legality).map(([f, limit]) => `${f} limit ${limit ?? "none"}`)
     : [];
@@ -110,13 +110,18 @@ export function renderCardDetail(c: CardDetail, _urls: RuleUrls): string {
     ),
     ...section(
       "Terms",
-      c.terms.map((t) => `- ${t.name}: ${t.definitionIds.map((id) => `[${id}]`).join(" ")}`),
+      c.terms.map(
+        (t) => `- ${t.name}: ${t.definitionIds.map((id) => citeLink(id, urls.get(id))).join(" ")}`,
+      ),
     ),
     ...section(
       "Referenced cards",
       c.references.map((r) => `- ${r.name} (${r.slug}) — ${r.kind}`),
     ),
-    ...section("Rules clauses that mention this card", c.clauses.map(renderClause)),
+    ...section(
+      "Rules clauses that mention this card",
+      c.clauses.map((cl) => `${citeLink(cl.clauseId, cl.url)} ${rewriteRuleLinks(cl.text, urls)}`),
+    ),
     ...section("Rulings on other cards that mention this card", c.otherRulings.map(renderRuling)),
   ].join("\n");
 }
