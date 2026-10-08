@@ -71,12 +71,14 @@ function data(relations: Partial<Relations> = {}): IndexData {
       {
         pageId: PAGE_ID,
         title: "Game Mechanics - Damage",
+        url: "https://rules.gatcg.com/game-mechanics/game-mechanics-damage",
         sections: [
           {
             sectionId: SECTION_ID,
             pageId: PAGE_ID,
             heading: "General Rules",
             kind: "heading",
+            url: "https://rules.gatcg.com/game-mechanics/game-mechanics-damage#general-rules",
             clauses: [
               {
                 clauseId: CLAUSE_ID,

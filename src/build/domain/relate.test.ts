@@ -34,12 +34,14 @@ function pageWith(texts: string[]): Page {
   return {
     pageId: "p",
     title: "P",
+    url: "https://rules.gatcg.com/p",
     sections: [
       {
         sectionId: "p#S",
         pageId: "p",
         heading: "S",
         kind: "heading",
+        url: "https://rules.gatcg.com/p#s",
         clauses: texts.map((text, i) => ({
           clauseId: `p#S:${i + 1}`,
           sectionId: "p#S",

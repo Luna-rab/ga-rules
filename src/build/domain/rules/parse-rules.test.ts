@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Correction } from "../corrections";
 import { DataError } from "../errors";
-import type { Clause, Page, RawPage } from "../model";
+import type { Clause, Page, RawPage, Section } from "../model";
 import { parseRules } from "./index";
 
 function clauses(pages: Page[]): Clause[] {
@@ -868,13 +868,12 @@ describe("parseRules: rule-text の修正", () => {
   });
 });
 
-// Page.url・Section.url は model.ts にまだ無いので、unknown として読む
-const urlOf = (x: object): unknown => (x as { url?: unknown }).url;
+const urlOf = (x: Page | Section): string => x.url;
 
-function sectionUrl(pages: Page[], pageId: string, sectionId: string): unknown {
+function sectionUrl(pages: Page[], pageId: string, sectionId: string): string {
   const s = page(pages, pageId).sections.find((x) => x.sectionId === sectionId);
   if (!s) throw new Error(`節 ${sectionId} が無い`);
-  return urlOf(s);
+  return s.url;
 }
 
 describe("parseRules: ページと節の URL", () => {
