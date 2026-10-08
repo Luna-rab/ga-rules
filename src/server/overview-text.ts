@@ -2,7 +2,7 @@
 
 export const SERVER_INSTRUCTIONS = `For any question about the Grand Archive TCG, call get_game_overview first, before answering. Then look up the relevant rules or card text with the other tools and answer from the quoted text. Do not answer from memory: this game is not Magic: The Gathering and your prior knowledge of other card games does not apply.
 
-Every rule clause is prefixed with [clause_id] and every card ruling with [cite_id]. Cite these IDs as sources.`;
+Every rule clause is prefixed with [clause_id] and every card ruling with [cite_id]. When you cite one as a source, write it as a Markdown link in the form [ID](URL), using the URL printed next to that ID in the tool result. If no URL is printed, cite the bare [ID].`;
 
 export const PROPER_NOUN_RULE = `Keep Grand Archive proper nouns in English — card names, keywords, game terms, zone and phase names — even when you answer in another language. Write "material deck", not "素材デッキ".`;
 

@@ -1,3 +1,4 @@
+import { cardUrl } from "../../shared/site-url";
 import type { ClauseNode } from "./clauses";
 import { citeLink, rewriteRuleLinks, type RuleUrls } from "./rule-links";
 import { type RulingNode, renderRuling } from "./rulings";
@@ -91,7 +92,7 @@ export function renderCardDetail(c: CardDetail, urls: RuleUrls): string {
     : [];
   const front = c.frontFace;
   return [
-    `## ${c.name} (${c.slug})`,
+    `## ${c.name} (${c.slug}) (${cardUrl(c.slug)})`,
     ...(front ? [`- Back face of: ${front.name} (${front.slug})`] : []),
     ...faceFields(c),
     ...field("Legality", legality),
@@ -99,7 +100,7 @@ export function renderCardDetail(c: CardDetail, urls: RuleUrls): string {
     ...(c.backFace
       ? [
           "",
-          `### Back face: ${c.backFace.name} (${c.backFace.slug})`,
+          `### Back face: ${c.backFace.name} (${c.backFace.slug}) (${cardUrl(c.backFace.slug)})`,
           ...faceFields(c.backFace),
           ...(c.backFace.effectRaw ? ["- Effect:", c.backFace.effectRaw] : []),
         ]
