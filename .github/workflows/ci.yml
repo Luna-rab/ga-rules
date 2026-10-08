@@ -1,9 +1,9 @@
 name: CI
 
+# main への push では deploy.yml がこのワークフローを呼ぶ。
 on:
   pull_request:
-  push:
-    branches: [main]
+  workflow_call:
 
 jobs:
   check:
@@ -14,4 +14,7 @@ jobs:
         with:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
+      # oxlint は型を見て infra/ もリントするので、check の前に infra/ の依存も入れる。
+      - run: bun install --frozen-lockfile --cwd infra
       - run: bun run check
+      - run: bun run --cwd infra typecheck

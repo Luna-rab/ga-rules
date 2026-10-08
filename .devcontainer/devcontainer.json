@@ -50,7 +50,10 @@
       ]
     }
   },
-  "mounts": ["source=claude-code-config,target=/home/node/.claude,type=volume"],
+  "mounts": [
+    "source=claude-code-config,target=/home/node/.claude,type=volume",
+    "source=ga-rules-gcloud-config,target=/home/vscode/.config/gcloud,type=volume"
+  ],
   "containerEnv": {
     "CLAUDE_CONFIG_DIR": "/home/node/.claude"
   }

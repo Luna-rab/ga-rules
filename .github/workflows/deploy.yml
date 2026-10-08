@@ -1,0 +1,53 @@
+name: Deploy
+
+# push のたびにルールとカードを取り直して Cloud Run に反映する。データだけ更新したいときは手動で実行する。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  check:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # WIF で GCP に入るのに使う
+    env:
+      GOOGLE_PROJECT: ${{ vars.GCP_PROJECT }}
+      PULUMI_CONFIG_PASSPHRASE: ""
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile --cwd infra
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOY_SA }}
+      - uses: docker/setup-buildx-action@v4
+      - run: echo "DATA_VERSION=$(date -u +%Y%m%dT%H%M%SZ)" >> "$GITHUB_ENV"
+      - id: pulumi
+        uses: pulumi/actions@v7
+        with:
+          command: up
+          stack-name: prod
+          work-dir: infra/app
+          cloud-url: gs://${{ vars.STATE_BUCKET }}
+      - name: Smoke test
+        env:
+          URL: ${{ steps.pulumi.outputs.url }}
+        run: |
+          curl -fsS -X POST "$URL" \
+            -H 'content-type: application/json' \
+            -H 'accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
+            | jq -e '.result.tools | map(.name) | index("get_game_overview")'
