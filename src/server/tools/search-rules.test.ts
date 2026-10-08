@@ -126,6 +126,37 @@ function lineOf(query: string, clauseId: string): string {
   return line;
 }
 
+describe("search_rules: 公式サイトの URL", () => {
+  const out = call("activate ability during opponent turn");
+  const clauseLines = out.text
+    .split("\n")
+    .filter((l) => /^- \[[^\]]+\]/.test(l) && !l.includes("#ruling:"));
+
+  test("条文の各行は - [clause_id](https://rules.gatcg.com/...) ( で始まる", () => {
+    expect(clauseLines.length).toBeGreaterThan(0);
+    for (const l of clauseLines) {
+      expect(l).toMatch(/^- \[[^\]]+\]\(https:\/\/rules\.gatcg\.com\/[^)\s]*\) \(/);
+    }
+  });
+
+  test("行の URL は、条文が属する節の URL", () => {
+    for (const l of clauseLines) {
+      const m = /^- \[([^\]]+)\]\(([^)]+)\) \(/.exec(l);
+      const clauseId = m?.[1] ?? "";
+      const row = ctx.db
+        .query(
+          `SELECT s.url FROM rule_clause c JOIN rule_section s ON s.section_id = c.section_id
+           WHERE c.clause_id = ?`,
+        )
+        .get(clauseId);
+      expect({ clauseId, url: m?.[2] }).toEqual({
+        clauseId,
+        url: z.object({ url: z.string() }).parse(row).url,
+      });
+    }
+  });
+});
+
 describe("search_rules: 条文の hint", () => {
   test("「Example:」の hint は 1 行表示から外れる", () => {
     // naming#General Rules:6 には「Example: A Tome of Sacred Lightning ...」の hint が付いている

@@ -1,7 +1,8 @@
 import { HINT_EXAMPLE, HINT_EXCEPTION } from "../../shared/hint";
+import type { RuleUrls } from "./rule-links";
 import { renderRuling, type RulingNode } from "./rulings";
 
-export type ClauseHit = { clauseId: string; pageTitle: string; text: string };
+export type ClauseHit = { clauseId: string; pageTitle: string; url: string; text: string };
 export type RulingHit = { ruling: RulingNode; cardCount: number; cardNames: string[] };
 
 function oneLine(s: string): string {
@@ -18,7 +19,11 @@ function clauseOneLine(text: string): string {
   return oneLine(lines.length > 0 ? lines.join("\n") : text);
 }
 
-export function renderSearchRules(clauses: ClauseHit[], rulings: RulingHit[]): string {
+export function renderSearchRules(
+  clauses: ClauseHit[],
+  rulings: RulingHit[],
+  _urls: RuleUrls,
+): string {
   const clauseLines = clauses.map(
     (c) => `- [${c.clauseId}] (${c.pageTitle}) ${clauseOneLine(c.text)}`,
   );

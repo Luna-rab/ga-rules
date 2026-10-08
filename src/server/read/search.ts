@@ -4,7 +4,12 @@ import { drizzle } from "drizzle-orm/bun-sqlite";
 import { z } from "zod";
 import type { ClauseHit, RulingHit } from "../render/search-rules";
 
-const ClauseRow = z.object({ clauseId: z.string(), pageTitle: z.string(), text: z.string() });
+const ClauseRow = z.object({
+  clauseId: z.string(),
+  pageTitle: z.string(),
+  url: z.string(),
+  text: z.string(),
+});
 const RulingRow = z.object({
   citeId: z.string(),
   dateAdded: z.string(),
@@ -25,7 +30,7 @@ const SNIPPET_TOKENS = 64;
 export function searchClauses(db: Database, match: string, limit: number): ClauseHit[] {
   return drizzle(db)
     .all(
-      sql`SELECT c.clause_id AS clauseId, p.title AS pageTitle,
+      sql`SELECT c.clause_id AS clauseId, p.title AS pageTitle, s.url AS url,
                  snippet(rule_clause_fts, 0, '', '', '...', ${SNIPPET_TOKENS}) AS text
           FROM rule_clause_fts f
           JOIN rule_clause c ON c.rowid = f.rowid

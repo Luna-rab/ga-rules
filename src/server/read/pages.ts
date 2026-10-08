@@ -36,6 +36,7 @@ export function readPage(db: Database, pageId: string): PageNode | null {
     sections: sections.map((s) => ({
       sectionId: s.sectionId,
       heading: s.heading,
+      url: s.url,
       clauses: clauses
         .filter((c) => c.sectionId === s.sectionId)
         .map((c) => ({ clauseId: c.clauseId, text: c.text })),

@@ -4,6 +4,7 @@ import { drizzle } from "drizzle-orm/bun-sqlite";
 import { z } from "zod";
 import { OVERVIEW_PAGE_IDS } from "../../shared/overview";
 import { card, rulePage, term, termAlias, termDefinition } from "../../shared/db/schema";
+import type { RuleUrls } from "../render/rule-links";
 import { type PageNode, readPage } from "./pages";
 
 export type TocEntry = {
@@ -35,6 +36,8 @@ export type Catalog = {
   terms: TermEntry[];
   cards: CardEntry[];
   attributes: Attributes;
+  // page_id・section_id → 公式サイトの URL
+  ruleUrls: RuleUrls;
 };
 
 const StringArray = z.array(z.string());
@@ -119,6 +122,7 @@ export function loadCatalog(db: Database): Catalog {
     overview,
     terms,
     cards: cardRows.map((c) => ({ slug: c.slug, name: c.name })),
+    ruleUrls: new Map(),
     attributes: {
       types: distinctSorted(sets.types),
       subtypes: distinctSorted(sets.subtypes),

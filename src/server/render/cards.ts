@@ -1,4 +1,5 @@
 import { type ClauseNode, renderClause } from "./clauses";
+import type { RuleUrls } from "./rule-links";
 import { type RulingNode, renderRuling } from "./rulings";
 
 export type CardCost = { type: string | null; value: string | null };
@@ -30,7 +31,7 @@ export type CardDetail = CardSummary & {
   // definitionIds は用語の定義の引用 ID（節 ID、ページ全体ならページ ID）
   terms: { name: string; definitionIds: string[] }[];
   references: { slug: string; name: string; kind: string }[];
-  clauses: ClauseNode[];
+  clauses: (ClauseNode & { url: string })[];
   otherRulings: RulingNode[];
 };
 
@@ -84,7 +85,7 @@ function section(heading: string, lines: string[]): string[] {
   return lines.length > 0 ? ["", `### ${heading}`, ...lines] : [];
 }
 
-export function renderCardDetail(c: CardDetail): string {
+export function renderCardDetail(c: CardDetail, _urls: RuleUrls): string {
   const legality = c.legality
     ? Object.entries(c.legality).map(([f, limit]) => `${f} limit ${limit ?? "none"}`)
     : [];

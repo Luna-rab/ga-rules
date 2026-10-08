@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import type { ToolContext } from "../context";
+import { rewriteRuleLinks } from "../render/rule-links";
 import { openTestContext } from "../testing";
+import { unrewrittenLinks } from "../tests/links";
 import { getTerm } from "./get-term";
 
 const ClauseRow = z.object({ clause_id: z.string(), text: z.string() });
@@ -26,7 +28,7 @@ function expectSection(text: string, sectionId: string): void {
     const at = lines.findIndex((l, i) => i > prev && l.trimStart().startsWith(`[${c.clause_id}] `));
     expect({ id: c.clause_id, found: at >= 0 }).toEqual({ id: c.clause_id, found: true });
     // 全文: 条文の本文が欠けない
-    expect(text).toContain(c.text);
+    expect(text).toContain(rewriteRuleLinks(c.text, ctx.catalog.ruleUrls));
     prev = at;
   }
 }
@@ -66,6 +68,34 @@ describe("get_term", () => {
       expectSection(out.text, "game-mechanics-counters#Buff");
       expectSection(out.text, "game-terms#Buff Counters");
     }
+  });
+
+  test("定義の節の見出しに、索引の節の URL が付く", () => {
+    const rows = ctx.db
+      .query(
+        "SELECT heading, url FROM rule_section WHERE section_id IN ('game-mechanics-counters#Buff', 'game-terms#Buff Counters')",
+      )
+      .all()
+      .map((r) => z.object({ heading: z.string(), url: z.string() }).parse(r));
+    expect(rows).toHaveLength(2);
+    const out = call("Buff");
+    for (const r of rows) expect(out.text).toContain(`#### ${r.heading} (${r.url})`);
+  });
+
+  test("本文のページへのリンクは [文言](URL) [target] に書き換わる", () => {
+    const out = call("Lineage");
+    const url = z
+      .object({ url: z.string() })
+      .parse(
+        ctx.db
+          .query("SELECT url FROM rule_section WHERE section_id = ?")
+          .get("game-zones-object-specific-zones#Inner Lineage"),
+      ).url;
+    expect(url).toStartWith("https://rules.gatcg.com/");
+    expect(out.text).toContain(
+      `[inner lineage](${url}) [game-zones-object-specific-zones#Inner Lineage]`,
+    );
+    expect(unrewrittenLinks(out.text)).toEqual([]);
   });
 
   test("Token は用語集の定義とトークンのページを返す", () => {

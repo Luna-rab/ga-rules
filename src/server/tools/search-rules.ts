@@ -21,6 +21,9 @@ export const searchRules: ToolDefinition<{ query: z.ZodString }> = {
     const clauses = searchClauses(ctx.db, match, 7);
     const rulings = searchRulings(ctx.db, match, 3);
     if (clauses.length + rulings.length === 0) return { text: "No results.", count: 0 };
-    return { text: renderSearchRules(clauses, rulings), count: clauses.length + rulings.length };
+    return {
+      text: renderSearchRules(clauses, rulings, ctx.catalog.ruleUrls),
+      count: clauses.length + rulings.length,
+    };
   },
 };

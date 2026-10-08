@@ -44,6 +44,7 @@ export const getTerm: ToolDefinition<{ term: z.ZodString }> = {
             page.pageId,
             glossaryTermNames(ctx.catalog.terms, def.pageId),
             generalSections(ctx.catalog.terms, def.pageId, page.sections),
+            ctx.catalog.ruleUrls,
           ),
         );
         continue;
@@ -52,7 +53,9 @@ export const getTerm: ToolDefinition<{ term: z.ZodString }> = {
         def.sectionId === null
           ? page.sections
           : page.sections.filter((s) => s.sectionId === def.sectionId);
-      blocks.push(`### ${page.title} (${page.pageId})\n\n${renderSections(sections)}`);
+      blocks.push(
+        `### ${page.title} (${page.pageId})\n\n${renderSections(sections, ctx.catalog.ruleUrls)}`,
+      );
     }
     return { text: [`## ${found.name}`, ...blocks].join("\n\n"), count: blocks.length };
   },

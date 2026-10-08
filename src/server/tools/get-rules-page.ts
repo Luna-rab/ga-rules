@@ -28,13 +28,16 @@ export const getRulesPage: ToolDefinition<{ page_id: z.ZodString }> = {
         pageId,
         readPage(ctx.db, pageId)?.sections ?? [],
       );
-      return { text: renderGlossary(entry.title, pageId, names, general), count: 1 };
+      return {
+        text: renderGlossary(entry.title, pageId, names, general, ctx.catalog.ruleUrls),
+        count: 1,
+      };
     }
     const page = readPage(ctx.db, pageId);
     if (!page)
       return { text: `Rules page "${pageId}" is missing from the index.`, isError: true, count: 0 };
     return {
-      text: `# ${page.title} (${page.pageId})\n\n${renderSections(page.sections)}`,
+      text: `# ${page.title} (${page.pageId})\n\n${renderSections(page.sections, ctx.catalog.ruleUrls)}`,
       count: 1,
     };
   },
