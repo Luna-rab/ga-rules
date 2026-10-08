@@ -137,6 +137,37 @@ async function rejection(p: Promise<unknown>): Promise<unknown> {
   );
 }
 
+// Page.url・Section.url は model.ts にまだ無いので、型を変えずに足す
+function withUrl<T extends object>(o: T, url: string): T {
+  return { ...o, url };
+}
+
+describe("writeIndex: ページと節の URL", () => {
+  test("Page.url・Section.url がそのまま rule_page.url・rule_section.url に入る", async () => {
+    const base = data();
+    const page = base.pages[0];
+    const section = page?.sections[0];
+    if (!page || !section) throw new Error("fixture が空");
+    const withUrls: IndexData = {
+      ...base,
+      pages: [
+        withUrl(
+          { ...page, sections: [withUrl(section, "https://rules.gatcg.com/dir/p#general-rules")] },
+          "https://rules.gatcg.com/dir/p",
+        ),
+      ],
+    };
+    await writeIndex(outPath, withUrls);
+    const db = open();
+    expect(db.query("SELECT page_id, url FROM rule_page").all()).toEqual([
+      { page_id: PAGE_ID, url: "https://rules.gatcg.com/dir/p" },
+    ]);
+    expect(db.query("SELECT section_id, url FROM rule_section").all()).toEqual([
+      { section_id: SECTION_ID, url: "https://rules.gatcg.com/dir/p#general-rules" },
+    ]);
+  });
+});
+
 describe("writeIndex: 各テーブルの行", () => {
   test("ページ・節・条文・条文のリンクを書く", async () => {
     await writeIndex(outPath, data());
