@@ -167,7 +167,7 @@ describe("get_rules_page: 公式サイトの URL", () => {
   });
 
   test("節見出しへのリンクは、target 全体を [] に残す", () => {
-    const out = call("playing-cards-resolution");
+    const out = call("abilities-resolving-triggered-and-activated-abilities");
     const target = "playing-cards-resolution#General Rules";
     const url = urlOf("rule_section", "section_id", target);
     expect(out.text).toMatch(
