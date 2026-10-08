@@ -24,6 +24,14 @@ const apis = [
 ].map((service) => new gcp.projects.Service(service, { service, disableOnDestroy: false }));
 const afterApis = { dependsOn: apis };
 
+// API を有効にしただけでは service agent ができていないことがあり、Workflows と Eventarc の作成が
+// 「service agent does not exist」で失敗する。先に作らせる。
+const serviceAgents = [
+  "workflows.googleapis.com",
+  "eventarc.googleapis.com",
+  "pubsub.googleapis.com",
+].map((service) => new gcp.projects.ServiceIdentity(service, { service }, afterApis));
+
 // ロールは付けない。標準出力は Cloud Run が Cloud Logging に送る。
 const runSa = new gcp.serviceaccount.Account(
   "run",
@@ -158,7 +166,7 @@ main:
         return: closed
 `,
   },
-  afterApis,
+  { dependsOn: serviceAgents },
 );
 // 権限より先に作ると、最初の通知で Workflows を起動できない。
 new gcp.eventarc.Trigger(
@@ -173,7 +181,7 @@ new gcp.eventarc.Trigger(
     destination: { workflow: stopper.id },
     serviceAccount: stopperSa.email,
   },
-  { dependsOn: stopperRoles },
+  { dependsOn: [...stopperRoles, ...serviceAgents] },
 );
 
 export const workloadIdentityProvider = provider.name;
