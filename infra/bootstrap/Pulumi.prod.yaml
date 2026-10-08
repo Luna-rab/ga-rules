@@ -1,0 +1,5 @@
+config:
+  gcp:region: us-central1
+  # Luna-rab/ga-rules の ID（gh api repos/Luna-rab/ga-rules --jq .id）
+  ga-rules-bootstrap:githubRepositoryId: "1395664644"
+encryptionsalt: v1:9r8VM5kOX3c=:v1:H+Hw6n9ZdwIZkbCf:NcZg40wpWkZ9kGSj02D/0iEbS7vE4w==

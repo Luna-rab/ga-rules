@@ -2,9 +2,12 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { Hono } from "hono";
 import type { ToolContext } from "./context";
 import { createMcpServer } from "./mcp";
+import { rateLimit, type RateLimitOptions } from "./rate-limit";
 
-export function createApp(ctx: ToolContext): Hono {
+export function createApp(ctx: ToolContext, options: { rateLimit?: RateLimitOptions } = {}): Hono {
   const app = new Hono();
+
+  if (options.rateLimit) app.use("/mcp", rateLimit(options.rateLimit));
 
   app.all("/mcp", async (c) => {
     const server = createMcpServer(ctx);
