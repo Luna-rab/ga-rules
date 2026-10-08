@@ -261,6 +261,7 @@ flowchart LR
    - リンクの文字列の前後の空白はリンクの外に出す（`[Loaded Cards ](...)zone` → `[Loaded Cards](...) zone`）。文字列がファイル名のリンク（GitBook のページへの mention、`[game-terms.md](...)`）は、文字列をリンク先のページ題にする。
 7. ページ・節・条文に並び順（`position`）を振る。ページの順と親子は目次 `SUMMARY.md` の入れ子から取り、`rule_page.parent_page_id` に持つ。`get_game_overview` の目次と、`get_rules_page` が条文からページを組み立て直すのに使う。条文の番号を文字列で並べると `10` が `2` より前に来るので、番号では並べない。
 8. ページの原文は持たない。`get_rules_page` は条文から組み立て直し、条文ごとに引用 ID を付けて返す。原文の行は、手順 3 で捨てるものを除いてすべて条文か節の見出しに入る（太字の小見出し `**1.1 Announcing Activation**` も節になる）ことを全 108 ページで確かめた。
+   - ページと節に公式サイト（rules.gatcg.com）の URL を作り、`rule_page.url`・`rule_section.url` に持つ。ページは `data/rules` のパスから `.md` を外したもの（`.../README.md` はディレクトリのパス）。`####`・`###` の節はページ URL + `#anchor`（見出しの `<a id>` の先頭、無ければ `gitbookAnchor(見出し)`）。太字の小見出しの節と、最初の見出しより前の lead 節は、サイト上にこれらの anchor が無いので `#` なしのページ URL にする。条文は属する節の URL を使う。組み立ては `src/shared/site-url.ts`。
 9. 概要に抜き出す 5 ページ（「最初に渡すゲームの概要」）のどれかが無ければビルドを止める。
 
 ### カードの取り込み
@@ -367,6 +368,7 @@ erDiagram
     rule_page {
         text page_id PK "例 game-mechanics-damage"
         text title
+        text url "rules.gatcg.com 上の URL"
         text parent_page_id FK "目次の親。最上位なら NULL"
         int position "目次の中の順番"
     }
@@ -374,6 +376,7 @@ erDiagram
         text section_id PK "例 game-mechanics-damage#General Rules"
         text page_id FK
         text heading
+        text url "ページ URL + #anchor。太字の節・lead 節は anchor が無くページ URL"
         int position "ページの中の順番"
     }
     rule_clause {
