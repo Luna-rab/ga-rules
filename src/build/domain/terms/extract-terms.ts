@@ -1,4 +1,4 @@
-import { TERM_SYNONYMS, termKey } from "../../../shared/term-key";
+import { TERM_SYNONYMS, termKey } from "../../../shared/domain/term-key";
 import { DataError } from "../errors";
 import type { Page, Section, Term, TermDefinition } from "../model";
 

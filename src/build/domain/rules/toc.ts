@@ -1,4 +1,4 @@
-import { OVERVIEW_PAGE_IDS } from "../../../shared/overview";
+import { OVERVIEW_PAGE_IDS } from "../../../shared/domain/overview";
 import { DataError } from "../errors";
 import type { Page, TocEntry } from "../model";
 import { pageIdOf } from "./index";

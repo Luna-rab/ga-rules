@@ -1,5 +1,5 @@
-import { createApp } from "./app";
-import { openContext } from "./context";
+import { createApp } from "./presentation/http/app";
+import { openContext } from "./infrastructure/sqlite/open";
 
 const ctx = openContext(process.env.INDEX_PATH ?? "index.sqlite");
 

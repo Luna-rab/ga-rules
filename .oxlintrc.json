@@ -88,10 +88,10 @@
                   "drizzle-orm/*",
                   "drizzle-kit",
                   "drizzle-kit/*",
-                  "**/infra",
-                  "**/infra/**"
+                  "**/infrastructure",
+                  "**/infrastructure/**"
                 ],
-                "message": "domain/ は入出力をしない。bun・bun:sqlite・Node の組み込み・drizzle・infra/ は infra/ か build-index.ts で使う"
+                "message": "domain/ は入出力をしない。bun・bun:sqlite・Node の組み込み・drizzle・infrastructure/ は infrastructure/ か build-index.ts で使う"
               }
             ]
           }
@@ -99,15 +99,21 @@
       }
     },
     {
-      "files": ["src/server/lookup/**", "src/server/render/**"],
+      "files": ["src/server/domain/**", "src/server/presentation/markdown/**"],
       "rules": {
         "no-restricted-imports": [
           "error",
           {
             "patterns": [
               {
-                "group": ["bun:sqlite", "drizzle-orm", "drizzle-orm/*", "**/read", "**/read/**"],
-                "message": "lookup/ と render/ は DB を読まない。DB は read/ で読み、tools/ から渡す"
+                "group": [
+                  "bun:sqlite",
+                  "drizzle-orm",
+                  "drizzle-orm/*",
+                  "**/infrastructure",
+                  "**/infrastructure/**"
+                ],
+                "message": "domain/ と presentation/markdown/ は DB を読まない。DB は infrastructure/sqlite/ で読み、presentation/mcp/tools/ から渡す"
               }
             ]
           }
