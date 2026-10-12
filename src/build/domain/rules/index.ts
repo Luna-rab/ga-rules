@@ -1,5 +1,5 @@
-import { HINT_EXAMPLE, HINT_EXCEPTION } from "../../../shared/hint";
-import { gitbookAnchor, rulesPageUrl, rulesSectionUrl } from "../../../shared/site-url";
+import { HINT_EXAMPLE, HINT_EXCEPTION } from "../../../shared/domain/hint";
+import { gitbookAnchor, rulesPageUrl, rulesSectionUrl } from "../../../shared/domain/site-url";
 import type { Correction } from "../corrections";
 import { DataError } from "../errors";
 import type { Clause, LinkTarget, Page, RawPage, Section, SectionKind } from "../model";

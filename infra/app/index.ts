@@ -55,7 +55,7 @@ const service = new gcp.cloudrunv2.Service("server", {
   deletionProtection: false,
   template: {
     serviceAccount: runServiceAccount,
-    // 1 台に保つ。src/server/rate-limit.ts はメモリで数えるので、2 台以上では枠が台数倍になる。
+    // 1 台に保つ。src/server/presentation/http/rate-limit.ts はメモリで数えるので、2 台以上では枠が台数倍になる。
     // CPU とメモリの料金もこれで 1 台分（月 $60 前後）に収まる。
     scaling: { minInstanceCount: 0, maxInstanceCount: 1 },
     timeout: "60s",

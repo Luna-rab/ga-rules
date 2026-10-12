@@ -1,4 +1,4 @@
-import { formatRulingCiteId } from "../../shared/cite";
+import { formatRulingCiteId } from "../../shared/domain/cite";
 import { DataError } from "./errors";
 import { toCardRows } from "./faces";
 import type { Card, Page, Ruling, Term } from "./model";

@@ -1,4 +1,4 @@
-import { TERM_SYNONYMS, termKey } from "../../../shared/term-key";
+import { TERM_SYNONYMS, type TermKeys } from "../../../shared/domain/term-key";
 import { DataError } from "../errors";
 import type { Page, Section, Term, TermDefinition } from "../model";
 
@@ -6,7 +6,7 @@ const EXCLUDED = new Set(["general rules"]);
 // 条文の箇条書き `- 名前: 説明` が用語の定義になっている節
 const LISTED_TERM_SECTIONS = new Set(["game-terms#Label Keywords"]);
 
-export function extractTerms(pages: Page[]): Term[] {
+export function extractTerms(pages: Page[], termKey: TermKeys["termKey"]): Term[] {
   const byKey = new Map<string, Term>();
 
   const add = (heading: string, def: TermDefinition) => {

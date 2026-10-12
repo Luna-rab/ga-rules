@@ -3,3 +3,6 @@ node_modules/
 # fetch:data と build:index の出力。イメージを作るたびに取得し直すので git に入れない
 data/
 index.sqlite
+
+# lint-boundary.test.ts が各層に置く試しのファイル。テストが途中で殺されると残る
+__lint_boundary_probe_*

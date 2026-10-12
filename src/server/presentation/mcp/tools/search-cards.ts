@@ -1,0 +1,46 @@
+import { z } from "zod";
+import { searchCards as run } from "../../../application/usecases/search-cards";
+import { SEARCH_LIMIT } from "../../../domain/card-query";
+import { renderCardLine } from "../../markdown/cards";
+import type { ToolDefinition } from "./types";
+
+const inputSchema = {
+  text: z.string().optional(),
+  type: z.string().optional(),
+  subtype: z.string().optional(),
+  class: z.string().optional(),
+  element: z.string().optional(),
+  cost_type: z.string().optional(),
+  speed: z.string().optional(),
+  legal_in: z.string().optional(),
+  banned_in: z.string().optional(),
+  cost_min: z.number().optional(),
+  cost_max: z.number().optional(),
+  level_min: z.number().optional(),
+  level_max: z.number().optional(),
+  power_min: z.number().optional(),
+  power_max: z.number().optional(),
+  life_min: z.number().optional(),
+  life_max: z.number().optional(),
+  durability_min: z.number().optional(),
+  durability_max: z.number().optional(),
+};
+
+export const searchCards: ToolDefinition<typeof inputSchema> = {
+  name: "search_cards",
+  description: `Searches Grand Archive cards by conditions; every condition given must hold. Returns up to ${SEARCH_LIMIT} cards, one per line, with the total match count. text matches name or effect text (all words); type, subtype, class, element take one value each (case-insensitive); cost_type is reserve/memory/none; speed is fast/slow; legal_in and banned_in are STANDARD/PANTHEON/DRAFT; the _min/_max pairs are numeric ranges. Back faces of double-faced cards are matched with their own stats and marked "back face of <front slug>"; legal_in and banned_in leave them out, since they can't be put in a deck. At least one condition is required.`,
+  inputSchema,
+  handler: (ctx, args) => {
+    const result = run(ctx, args);
+    if (result.kind === "invalid") return { text: result.message, isError: true, count: 0 };
+
+    const { total, hits } = result;
+    if (hits.length === 0) return { text: "No cards found.", count: 0 };
+    const header =
+      total > result.limit
+        ? `Showing ${hits.length} of ${total} cards. Add more conditions to narrow the results.`
+        : `${total} ${total === 1 ? "card" : "cards"}.`;
+    const lines = hits.map((h) => renderCardLine(h.card, h.snippet?.replace(/\s+/g, " ")));
+    return { text: [header, ...lines].join("\n"), count: hits.length };
+  },
+};
