@@ -23,7 +23,7 @@ export const getTerm: ToolDefinition<{ term: z.ZodString }> = {
         count: 0,
       };
     }
-    const matches = findTerms(ctx.catalog.terms, term);
+    const matches = findTerms(ctx.catalog.terms, term, ctx.termKeys);
     const found = matches[0];
     if (!found) return { text: `No term matching "${term.trim()}" was found.`, count: 0 };
     if (matches.length > 1) {

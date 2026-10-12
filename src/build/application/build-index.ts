@@ -7,6 +7,8 @@ import { assertTermSources, extractTerms } from "../domain/terms";
 import { DATA_DIR } from "../infrastructure/fetch/data-dir";
 import { writeIndex } from "../infrastructure/sqlite/index-writer";
 import { readCards, readRules, readSummary } from "../infrastructure/raw-store/file-raw-source";
+import { createTermKeys } from "../../shared/domain/term-key";
+import { compromiseInflector } from "../../shared/infrastructure/nlp/compromise-inflector";
 
 // readRules/readCards/readSummary → applyCardCorrections → parseRules → assertOverviewPages → parseToc → extractTerms → assertTermSources → toRulings → applyRulingCorrections → assertErrataApplied → relate → writeIndex
 // DataError は writeIndex より前に投げられるので、outPath には何も書かない。
@@ -20,7 +22,7 @@ export async function buildIndex(opts: { dataDir: string; outPath: string }): Pr
   const pages = parseRules(rawPages, CORRECTIONS);
   assertOverviewPages(pages);
   const toc = parseToc(summary, pages);
-  const terms = extractTerms(pages);
+  const terms = extractTerms(pages, createTermKeys(compromiseInflector).termKey);
   assertTermSources(pages, terms);
   const rulings = applyRulingCorrections(toRulings(cards), CORRECTIONS);
   assertErrataApplied(cards, rulings);

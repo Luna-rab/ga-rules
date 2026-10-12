@@ -119,6 +119,12 @@
           }
         ]
       }
+    },
+    {
+      "files": ["src/**/__tests__/**"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
     }
   ],
   "options": {

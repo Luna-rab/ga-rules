@@ -1,4 +1,4 @@
-import { looseKey, TERM_SYNONYMS, termKey } from "../../shared/domain/term-key";
+import { TERM_SYNONYMS, type TermKeys } from "../../shared/domain/term-key";
 
 // 本文の代わりに用語名の一覧を返す用語集のページ（get_term で引く）
 export const GLOSSARY_PAGE_IDS: readonly string[] = ["keywords-and-abilities", "game-terms"];
@@ -17,14 +17,18 @@ export function glossaryTermNames(terms: TermLike[], pageId: string): string[] {
 }
 
 // 2 語以上に当たったら、呼び出し側が候補として示せるよう全部返す
-export function findTerms<T extends TermLike>(terms: T[], input: string): T[] {
+export function findTerms<T extends TermLike>(terms: T[], input: string, keys: TermKeys): T[] {
   if (input.trim() === "") return [];
-  const whole = findByKeys(terms, input);
+  const whole = findByKeys(terms, input, keys);
   if (whole.length > 0 || !input.includes("/")) return whole;
-  return [...new Set(input.split("/").flatMap((part) => findByKeys(terms, part)))];
+  return [...new Set(input.split("/").flatMap((part) => findByKeys(terms, part, keys)))];
 }
 
-function findByKeys<T extends TermLike>(terms: T[], input: string): T[] {
+function findByKeys<T extends TermLike>(
+  terms: T[],
+  input: string,
+  { termKey, looseKey }: TermKeys,
+): T[] {
   if (input.trim() === "") return [];
   const key = termKey(input);
   const exact = terms.filter((t) => [t.name, ...t.aliases].some((f) => termKey(f) === key));

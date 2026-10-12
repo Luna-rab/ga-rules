@@ -67,7 +67,7 @@ describe("get_game_overview", () => {
     const names = [...out.text.matchAll(/get_term\("([^"]+)"\)/g)].map((m) => m[1] ?? "");
     expect(names.length).toBeGreaterThan(0);
     for (const name of names) {
-      const hits = findTerms(ctx.catalog.terms, name).length;
+      const hits = findTerms(ctx.catalog.terms, name, ctx.termKeys).length;
       expect({ name, hits }).toEqual({ name, hits: 1 });
     }
   });

@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { Clause, Page, SectionKind, Term } from "../../model";
 import { DataError } from "../../errors";
-import { assertTermSources, extractTerms, Matcher } from "..";
+import { createTermKeys } from "../../../../shared/domain/term-key";
+import { compromiseInflector } from "../../../../shared/infrastructure/nlp/compromise-inflector";
+import { assertTermSources, extractTerms as extract, Matcher } from "..";
+
+const { termKey } = createTermKeys(compromiseInflector);
+const extractTerms = (pages: Page[]) => extract(pages, termKey);
 
 // 条文は用語の抽出に使わないので、節は見出しと種類だけを持たせる。
 // 文字列だけ渡した節は #### の見出し（kind "heading"）
