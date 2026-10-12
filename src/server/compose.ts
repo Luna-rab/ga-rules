@@ -6,7 +6,7 @@ import { loadCatalog } from "./infrastructure/sqlite/catalog-loader";
 import { openIndexDatabase } from "./infrastructure/sqlite/open";
 import { createSqliteRuleRepository } from "./infrastructure/sqlite/rule-repository";
 
-// ツールが受け取るものを実装から組み立てる。DB や自然言語処理のライブラリを替えるときはここを直す
+// DB や自然言語処理のライブラリを替えるときはここを直す
 export function createToolContext(db: Database): ToolContext {
   return {
     rules: createSqliteRuleRepository(db),
