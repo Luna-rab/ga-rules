@@ -264,7 +264,7 @@
                   "**/presentation",
                   "**/presentation/**"
                 ],
-                "message": "application/ は外側の層を import しない。実装は組み立て役（build/index.ts・server/index.ts）が渡す"
+                "message": "application/ は外側の層を import しない。実装は組み立て役（build/index.ts・server/compose.ts）が渡す"
               },
               {
                 "group": ["../**/server", "../**/server/**"],
@@ -309,7 +309,7 @@
                   "**/presentation",
                   "**/presentation/**"
                 ],
-                "message": "application/ は外側の層を import しない。実装は組み立て役（build/index.ts・server/index.ts）が渡す"
+                "message": "application/ は外側の層を import しない。実装は組み立て役（build/index.ts・server/compose.ts）が渡す"
               },
               {
                 "group": ["../**/build", "../**/build/**"],
@@ -337,7 +337,7 @@
                   "**/infrastructure",
                   "**/infrastructure/**"
                 ],
-                "message": "presentation/ は DB や実装を直接使わない。application/ のユースケースとポートを通す。実装は組み立て役（server/index.ts）が渡す"
+                "message": "presentation/ は DB や実装を直接使わない。application/ のユースケースとポートを通す。実装は組み立て役（server/compose.ts）が渡す"
               },
               {
                 "group": ["../**/build", "../**/build/**"],
@@ -407,12 +407,59 @@
     {
       "files": ["src/**/__tests__/**"],
       "rules": {
-        "no-restricted-imports": "off",
         "no-restricted-globals": "off"
       }
     },
     {
-      "files": ["src/*/domain/**/__tests__/**"],
+      "files": ["src/shared/**/__tests__/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["../**/build", "../**/build/**", "../**/server", "../**/server/**"],
+                "message": "shared/ は Docker の両方の段に入るので、build/ と server/ を import しない"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/build/**/__tests__/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["../**/server", "../**/server/**"],
+                "message": "build/ と server/ は別の段に入るので、互いに import しない。共有するものは shared/ に置く"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/server/**/__tests__/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["../**/build", "../**/build/**"],
+                "message": "build/ と server/ は別の段に入るので、互いに import しない。共有するものは shared/ に置く"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/shared/domain/**/__tests__/**"],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -427,6 +474,62 @@
                   "**/infrastructure/sqlite/**"
                 ],
                 "message": "domain/ のテストはデータを直接渡して確かめる。DB を通すテストは infrastructure/ か presentation/ に置く"
+              },
+              {
+                "group": ["../**/build", "../**/build/**", "../**/server", "../**/server/**"],
+                "message": "shared/ は Docker の両方の段に入るので、build/ と server/ を import しない"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/build/domain/**/__tests__/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "bun:sqlite",
+                  "drizzle-orm",
+                  "drizzle-orm/*",
+                  "**/infrastructure/sqlite",
+                  "**/infrastructure/sqlite/**"
+                ],
+                "message": "domain/ のテストはデータを直接渡して確かめる。DB を通すテストは infrastructure/ か presentation/ に置く"
+              },
+              {
+                "group": ["../**/server", "../**/server/**"],
+                "message": "build/ と server/ は別の段に入るので、互いに import しない。共有するものは shared/ に置く"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/server/domain/**/__tests__/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "bun:sqlite",
+                  "drizzle-orm",
+                  "drizzle-orm/*",
+                  "**/infrastructure/sqlite",
+                  "**/infrastructure/sqlite/**"
+                ],
+                "message": "domain/ のテストはデータを直接渡して確かめる。DB を通すテストは infrastructure/ か presentation/ に置く"
+              },
+              {
+                "group": ["../**/build", "../**/build/**"],
+                "message": "build/ と server/ は別の段に入るので、互いに import しない。共有するものは shared/ に置く"
               }
             ]
           }

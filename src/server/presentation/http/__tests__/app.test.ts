@@ -67,7 +67,6 @@ const recordLog: ToolCallLogger = (entry) => {
   recorded.push(entry);
 };
 
-// fn の間に書かれた呼び出しログを集める
 async function captureLogs(fn: () => Promise<void>): Promise<ToolCallLog[]> {
   recorded.length = 0;
   await fn();

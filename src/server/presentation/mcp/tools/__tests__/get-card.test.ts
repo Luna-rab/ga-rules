@@ -4,7 +4,7 @@ import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import { openContext } from "../../../../infrastructure/sqlite/open";
+import { openContext } from "../../../../compose";
 import { rewriteRuleLinks } from "../../../markdown/rule-links";
 import { openTestContext } from "../../../../__tests__/helpers/open-test-context";
 import { unrewrittenLinks } from "../../../../__tests__/helpers/links";

@@ -127,19 +127,22 @@ src/
 
 ### コードの層
 
-`src/build/`・`src/server/`・`src/shared/` の中を、同じ 4 つの層に分ける。ライブラリを使ってよい層を決め、処理の手順とゲームの規則をライブラリから切り離す。取得元・データベース・自然言語処理のライブラリ・MCP の SDK を替えるとき、直すのを `infrastructure/`・`presentation/` と組み立て役に限る。
+`src/build/`・`src/server/`・`src/shared/` の中を、次の層に分ける。ライブラリを使ってよい層を決め、処理の手順とゲームの規則をライブラリから切り離す。取得元・データベース・自然言語処理のライブラリ・MCP の SDK を替えるとき、直すのを `infrastructure/`・`presentation/` と組み立て役に限る。
 
-| 層                | 置くもの                                                            | 使ってよいライブラリ                |
-| ----------------- | ------------------------------------------------------------------- | ----------------------------------- |
-| `domain/`         | ルール文書・カードの型と、データを受け取ってデータを返す関数        | なし                                |
-| `application/`    | 処理の手順（ユースケース）と、入出力の型（`ports.ts`）              | なし                                |
-| `infrastructure/` | `ports.ts` の実装。ファイル・SQLite・HTTP での取得・compromise      | bun・Node・drizzle・zod・compromise |
-| `presentation/`   | サーバーだけ。MCP のツール定義・HTTP・Markdown への整形             | zod・hono・MCP SDK                  |
-| 組み立て役        | `build/index.ts`・`server/index.ts`。実装を作り、ユースケースに渡す | すべて                              |
+| 層                | 置くもの                                                              | lint が禁じる import                                 |
+| ----------------- | --------------------------------------------------------------------- | ---------------------------------------------------- |
+| `domain/`         | ルール文書・カードの型と、データを受け取ってデータを返す関数          | bun・Node・ライブラリすべて・ほかの層                |
+| `application/`    | 処理の手順（ユースケース）と、入出力の型（`ports.ts`）                | bun・Node・ライブラリすべて・外側の層                |
+| `infrastructure/` | `ports.ts` の実装。ファイル・SQLite・HTTP での取得・compromise        | `presentation/`                                      |
+| `presentation/`   | MCP のツール定義・HTTP・Markdown への整形                             | `bun:sqlite`・drizzle・compromise・`infrastructure/` |
+| 組み立て役        | `build/index.ts`・`server/compose.ts`。実装を作り、ユースケースに渡す | なし                                                 |
+
+- 層はパッケージごとに要るものだけ置く。`build/` は `presentation/` を持たず（コマンドの入口は組み立て役が兼ねる）、`shared/` は `domain/` と `infrastructure/` だけを持つ。`shared/` には手順が無いので、ポートの型は `domain/` に置く（`domain/inflector.ts`）。
+- 「ライブラリすべて」は drizzle・zod・hono・MCP SDK・compromise。`infrastructure/` と `presentation/` は、上の表で禁じたもの以外を使ってよい。
 
 ```mermaid
 flowchart LR
-    M[index.ts<br/>組み立て役] --> P[presentation/]
+    M[組み立て役] --> P[presentation/]
     M --> I[infrastructure/]
     P --> A[application/]
     I --> A
@@ -148,11 +151,11 @@ flowchart LR
     I --> D
 ```
 
-- 依存は図の矢印の向きだけ。逆向きの import と、表に無いライブラリの import は、oxlint の `no-restricted-imports`（`.oxlintrc.json` の `overrides`）で `bun run check` が失敗する。各層で禁じた import が本当に落ちることは `src/shared/__tests__/lint-boundary.test.ts` が確かめる。分けたつもりでも、守らせる仕組みが無いと崩れる。
+- 依存は図の矢印の向きだけ。`build/` と `server/` からは、`shared/` の同じ層とそれより内側も import してよい（`server/infrastructure/` → `shared/infrastructure/sqlite/schema.ts` など）。表で禁じた import は、oxlint の `no-restricted-imports`（`.oxlintrc.json` の `overrides`）で `bun run check` が失敗する。禁じた import が本当に落ちることは `src/shared/__tests__/lint-boundary.test.ts` が確かめる。分けたつもりでも、守らせる仕組みが無いと崩れる。
 - `domain/` と `application/` では、グローバルの `Bun`・`process`・`fetch` も `no-restricted-globals` で禁じる。import の制限では止まらない。動的な `import()` と `require()` はどちらでも止まらないので使わない。
 - パッケージの間でも、`shared/` は `build/`・`server/` を、`build/` と `server/` は互いを import しない。Docker の段に入れるファイルを `build/`・`server/`・`shared/` の単位で選んでいるので、逆向きの import は段に要るファイルを欠けさせる。
-- `__tests__/` は層の制限から外す。テストは実装をつないで確かめる。ただし `domain/` のテストは DB を通さず、データを直接渡す。
-- ポート（`ports.ts` の型）は関数を並べたオブジェクトの型にし、実装は `create〜` の関数が返す。クラスと DI コンテナは使わない。実装は今どれも 1 つで、テストも実データで回すので差し替えはしないが、ライブラリの呼び出しが処理の途中に紛れ込まないよう境界を置く。
+- `__tests__/` は層の制限から外す。テストは実装をつないで確かめる。パッケージの間の制限はテストにもかける。`domain/` のテストは DB を通さず、データを直接渡す。
+- ポートは関数の型か、関数を並べたオブジェクトの型にする。実装を作るのに引数が要るもの（DB・出力先のパス）は `create〜` の関数が返す。クラスと DI コンテナは使わない。実装は今どれも 1 つで、テストも実データで回すので差し替えはしないが、ライブラリの呼び出しが処理の途中に紛れ込まないよう境界を置く。
 - 用語のキー（単数形・原形にそろえた語）は、索引ビルドとサーバーが同じものを使わないと、ビルドがまとめた用語に `get_term` の入力が当たらない。両方とも `src/shared/infrastructure/nlp/compromise-inflector.ts` の `termKeys` を使う。
 - 採らなかった構成: `src/` の最上位を層にする（`src/domain/build/` など）。Docker の 1 段目と 2 段目に入れるファイルを `build/`・`server/`・`shared/` の単位で選んでいる。最上位を層にすると、`drizzle-kit` のようなビルドだけの依存がサーバーの段に混ざらないよう、選び方を作り直すことになる。
 
@@ -215,7 +218,8 @@ src/server/
     mcp/            McpServer の組み立てと、ツールの名前・説明文・zod の入力スキーマ・結果の文言
     markdown/       結果 → Markdown の純粋な関数
     http/           Hono の /mcp と回数の制限
-  index.ts          組み立て役。DB を読み取り専用で開き、実装をつないで Hono に渡す
+  compose.ts        組み立て役。DB を読み取り専用で開き、リポジトリ・catalog・用語のキーをつなぐ
+  index.ts          起動。compose.ts の結果とログの出力先を Hono に渡す
 ```
 
 - 利用者に返す英語の文言と Markdown は `presentation/` で作る。案内にツール名（「Find slugs with find_cards」）が入り、MCP の都合で決まるため。ユースケースは結果の種類とデータだけを返す。
@@ -351,7 +355,7 @@ flowchart LR
   - 見出しから機械的に名前を作る。`<a id>` を外し、末尾の ` N`（`Critical N`）と括弧の補足（`Lineage (term)`）を外す。`/` と `and` で並んだ語（`Activate/Activating`・`Died/Dies and Kills/Killed`）は別名として持つ。
   - `###`・行頭の太字の見出し（`Deleveling`）も用語にする。`Delevel` の定義はここにしか無い。番号付きの手順（`1.1 Announcing Activation`）と末尾が `:` の前置き（`Masteries:`）は外す。
   - 見出しでなく条文に名前がある用語も拾う。`Label Keywords` の箇条書き（`Deluge`・`Upkeep`）と、機能サブタイプのページで小見出しの役をする条文（`Siegeable`・`Gun / Bow / Aetherwing`）。
-  - 複数形・ハイフン・空白・`X Counters` の Counters を落としたキー（`src/shared/domain/term-key.ts` の `termKey`）が同じ見出しは 1 語にまとめる。`Buff` と `Buff Counters`、`Token` と `Tokens`（ページ）は同じものの定義が別の場所にあり、分けると片方しか返らない。動詞の活用は原形に戻さない。`Load` と `Loaded`、`Negate` と `Negated`、`Link` と `Linked` は別の用語。
+  - 複数形・ハイフン・空白・`X Counters` の Counters を落としたキー（`src/shared/domain/term-key.ts` の `createTermKeys` が作る `termKey`）が同じ見出しは 1 語にまとめる。`Buff` と `Buff Counters`、`Token` と `Tokens`（ページ）は同じものの定義が別の場所にあり、分けると片方しか返らない。動詞の活用は原形に戻さない。`Load` と `Loaded`、`Negate` と `Negated`、`Link` と `Linked` は別の用語。
 - **名前と定義の場所を分ける**: 同じ名前の定義が複数の場所にある。`Bulwark`（カウンターとキーワード能力）・`Durability`（ステータスとカウンター）・`Lineage`（用語とキーワード能力）は意味が違い、`Redirect`・`Last-Known Information` は詳しい説明と用語集の要約。本文の「Bulwark」がどちらの意味かは文字列の照合では決められないので、本文の語は名前（`term`）に結び、`get_term` は定義（`term_definition`）をすべて返して、文脈からモデルに選ばせる。定義を 1 つに絞ると、カウンターとしての意味などが消える。
 - **当たったものはすべて記録する**: 1 枚あたり中央値 7 語、上位 10% で 10 語当たり、大半は `Champion`（942 枚）・`Target`（773 枚）のような基本語。索引には事実をすべて持たせ、何を見せるか（当たるカードが少ない順に上位 N 語など）はツールの側で決める。除外リストやしきい値を索引に埋め込むと、使ってみて変えたいときに取り込みからやり直しになる。
 - **記録する単位**: ルール文書は条文単位で結ぶ（`clause_term`・`clause_card`）。ページ単位では「どの条文か」を後から復元できず、モデルが最大 3,000 トークンのページを丸ごと読むことになる。ページ単位が欲しいときは条文からたどる。

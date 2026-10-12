@@ -2,7 +2,8 @@ import type { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { ToolContext } from "../../application/context";
-import { createToolContext, openIndexDatabase } from "../../infrastructure/sqlite/open";
+import { createToolContext } from "../../compose";
+import { openIndexDatabase } from "../../infrastructure/sqlite/open";
 
 const DEFAULT_INDEX = fileURLToPath(new URL("../../../../index.sqlite", import.meta.url));
 

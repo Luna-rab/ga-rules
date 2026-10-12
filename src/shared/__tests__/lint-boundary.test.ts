@@ -33,14 +33,20 @@ const DIRS: Dir[] = [
   { dir: "src/server/application", pkg: "server", layer: "application" },
   { dir: "src/server/presentation/markdown", pkg: "server", layer: "presentation" },
   { dir: "src/server/presentation/mcp/tools", pkg: "server", layer: "presentation" },
+  { dir: "src/server/presentation/http", pkg: "server", layer: "presentation" },
   { dir: "src/build/infrastructure/sqlite", pkg: "build", layer: "infrastructure" },
+  { dir: "src/build/infrastructure/fetch", pkg: "build", layer: "infrastructure" },
   { dir: "src/server/infrastructure/sqlite", pkg: "server", layer: "infrastructure" },
+  { dir: "src/server/infrastructure/logging", pkg: "server", layer: "infrastructure" },
   { dir: "src/shared/infrastructure/sqlite", pkg: "shared", layer: "infrastructure" },
+  { dir: "src/shared/infrastructure/nlp", pkg: "shared", layer: "infrastructure" },
   { dir: "src/build", pkg: "build", layer: "root" },
   { dir: "src/server", pkg: "server", layer: "root" },
   { dir: "src/build/domain/__tests__", pkg: "build", layer: "domain-test" },
   { dir: "src/server/domain/__tests__", pkg: "server", layer: "domain-test" },
   { dir: "src/server/presentation/mcp/tools/__tests__", pkg: "server", layer: "test" },
+  { dir: "src/build/__tests__", pkg: "build", layer: "test" },
+  { dir: "src/shared/__tests__", pkg: "shared", layer: "test" },
 ];
 
 const LintReport = z.object({
@@ -62,14 +68,12 @@ function libraryCase(from: string, name: string, blockedIn: Layer[]): Case {
   };
 }
 
-// shared/ は build/・server/ を、build/ と server/ は互いを import しない。テストはこの制限の外
+// shared/ は build/・server/ を、build/ と server/ は互いを import しない。テストも同じ
 function crossesPackage(d: Dir, target: Pkg): boolean {
-  if (d.layer === "test" || d.layer === "domain-test") return false;
   if (d.pkg === "shared") return target !== "shared";
   return target !== "shared" && target !== d.pkg;
 }
 
-// from はリポジトリの中のモジュール。置いたディレクトリからの相対パスで import する
 function moduleCase(from: string, name: string, blockedIn: Layer[]): Case {
   const target = (["build", "server", "shared"] as const).find((p) => from.startsWith(`src/${p}/`));
   if (target === undefined) throw new Error(`src/ の下のパッケージではない: ${from}`);
@@ -113,7 +117,7 @@ const CASES: Case[] = [
     "application",
     "presentation",
   ]),
-  moduleCase("src/server/infrastructure/sqlite/open", "{ openContext }", DB),
+  moduleCase("src/server/infrastructure/sqlite/open", "{ openIndexDatabase }", DB),
   moduleCase("src/server/presentation/markdown/rule-links", "{ citeLink }", [
     "domain",
     "application",
@@ -132,7 +136,6 @@ const probes = DIRS.flatMap((d) =>
   CASES.map((c, i) => ({ ...d, c, path: `${d.dir}/${PROBE_PREFIX}${RUN}_${i}__.ts` })),
 );
 
-// ファイルごとの、oxlint が出したルールの名前
 const rulesByFile = new Map<string, Set<string>>();
 let lintedFiles = 0;
 let createdDirs: string[] = [];

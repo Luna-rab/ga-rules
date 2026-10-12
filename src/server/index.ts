@@ -1,5 +1,5 @@
 import { logToolCall } from "./infrastructure/logging/console-logger";
-import { openContext } from "./infrastructure/sqlite/open";
+import { openContext } from "./compose";
 import { createApp } from "./presentation/http/app";
 
 const ctx = openContext(process.env.INDEX_PATH ?? "index.sqlite");
