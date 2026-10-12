@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { compromiseInflector } from "../../infrastructure/nlp/compromise-inflector";
-import { createTermKeys } from "../term-key";
+import { termKeys } from "../../infrastructure/nlp/compromise-inflector";
 
-// 本物の compromise を渡す。スタブにすると、compromise を差し替えたときの語形の変わり方を確かめなくなる
-const { termKey, looseKey } = createTermKeys(compromiseInflector);
+// 本物の compromise を使う。スタブにすると、compromise を差し替えたときの語形の変わり方を確かめなくなる
+const { termKey, looseKey } = termKeys;
 
 describe("termKey", () => {
   test.each([
