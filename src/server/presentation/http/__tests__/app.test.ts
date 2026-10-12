@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { z } from "zod";
 import { createApp } from "../app";
-import { logToolCall } from "../../../infrastructure/logging/console-logger";
+import type { ToolCallLog, ToolCallLogger } from "../../../application/ports";
 import { getGameOverview } from "../../mcp/tools/get-game-overview";
 import { openTestContext } from "../../../__tests__/helpers/open-test-context";
 
@@ -62,25 +62,16 @@ const SEARCH_CARDS_NUMBERS = [
   "durability_max",
 ];
 
-// console.log に出た JSON 1 行ごとのオブジェクトを集めながら fn を流す。
-async function captureLogs(fn: () => Promise<void>): Promise<Record<string, unknown>[]> {
-  const spy = spyOn(console, "log").mockImplementation(() => {});
-  try {
-    await fn();
-    return spy.mock.calls
-      .map((c) => c[0])
-      .filter((a): a is string => typeof a === "string")
-      .flatMap((s) => {
-        try {
-          const parsed = z.record(z.string(), z.unknown()).safeParse(JSON.parse(s));
-          return parsed.success ? [parsed.data] : [];
-        } catch {
-          return [];
-        }
-      });
-  } finally {
-    spy.mockRestore();
-  }
+const recorded: ToolCallLog[] = [];
+const recordLog: ToolCallLogger = (entry) => {
+  recorded.push(entry);
+};
+
+// fn の間に書かれた呼び出しログを集める
+async function captureLogs(fn: () => Promise<void>): Promise<ToolCallLog[]> {
+  recorded.length = 0;
+  await fn();
+  return [...recorded];
 }
 
 describe("/mcp（実データの索引）", () => {
@@ -94,7 +85,7 @@ describe("/mcp（実データの索引）", () => {
   }
 
   beforeAll(async () => {
-    app = createApp(openTestContext(), { logToolCall });
+    app = createApp(openTestContext(), { logToolCall: recordLog });
     tools = z.array(ToolInfo).parse((await call("tools/list")).tools);
   });
 
@@ -182,22 +173,11 @@ describe("/mcp（実データの索引）", () => {
       expect({ k, type: props[k]?.type }).toEqual({ k, type: "number" });
   });
 
-  test("tools/call で get_game_overview を呼ぶと JSON 1 行が標準出力に出る", async () => {
-    const spy = spyOn(console, "log").mockImplementation(() => {});
-    const result = await call("tools/call", { name: "get_game_overview", arguments: {} });
-    const lines = spy.mock.calls
-      .map((c) => c[0])
-      .filter((a): a is string => typeof a === "string")
-      .flatMap((s) => {
-        try {
-          const parsed = z.record(z.string(), z.unknown()).safeParse(JSON.parse(s));
-          return parsed.success ? [parsed.data] : [];
-        } catch {
-          return [];
-        }
-      })
-      .filter((o) => o.tool === "get_game_overview");
-    spy.mockRestore();
+  test("tools/call で get_game_overview を呼ぶと、呼び出しログが 1 件書かれる", async () => {
+    let result: Record<string, unknown> = {};
+    const lines = await captureLogs(async () => {
+      result = await call("tools/call", { name: "get_game_overview", arguments: {} });
+    });
 
     expect(result.isError).toBeFalsy();
     expect(lines).toHaveLength(1);

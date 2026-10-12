@@ -5,8 +5,7 @@ import type { ToolDefinition } from "./types";
 
 export const getCard: ToolDefinition<{ slugs: z.ZodArray<z.ZodString> }> = {
   name: "get_card",
-  description:
-    "Returns full details of 1 to 5 Grand Archive cards by exact slug: stored fields, all rulings with [cite_id], terms, referenced cards, and rules clauses that mention the card name. ERRATA that reword the effect text are already applied to it; ERRATA rulings record what changed. For a double-faced card, the front's details include its back face; a back face's slug returns the back face with the front's rulings. Get slugs from find_cards or search_cards.",
+  description: `Returns full details of 1 to ${MAX_SLUGS} Grand Archive cards by exact slug: stored fields, all rulings with [cite_id], terms, referenced cards, and rules clauses that mention the card name. ERRATA that reword the effect text are already applied to it; ERRATA rulings record what changed. For a double-faced card, the front's details include its back face; a back face's slug returns the back face with the front's rulings. Get slugs from find_cards or search_cards.`,
   inputSchema: { slugs: z.array(z.string()) },
   handler: (ctx, { slugs }) => {
     const result = run(ctx, slugs);

@@ -1,6 +1,6 @@
 import type { CardEntry } from "./model";
 
-const MAX_CANDIDATES = 10;
+export const MAX_CANDIDATES = 10;
 const MIN_SIMILARITY = 0.75;
 
 // 小文字にし、英数字以外を区切りにして語に分ける。

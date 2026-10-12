@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { findCards as run, MAX_NAME_LENGTH } from "../../../application/usecases/find-cards";
+import { MAX_CANDIDATES } from "../../../domain/card-name";
 import { renderCardLine } from "../../markdown/cards";
 import type { ToolDefinition } from "./types";
 
 export const findCards: ToolDefinition<{ name: z.ZodString }> = {
   name: "find_cards",
-  description:
-    'Finds Grand Archive cards whose names resemble the given name (tolerates typos and partial names). Returns up to 10 candidates, one per line, with slug. Back faces of double-faced cards have their own slug and are marked "back face of <front slug>". Use the slug with get_card.',
+  description: `Finds Grand Archive cards whose names resemble the given name (tolerates typos and partial names). Returns up to ${MAX_CANDIDATES} candidates, one per line, with slug. Back faces of double-faced cards have their own slug and are marked "back face of <front slug>". Use the slug with get_card.`,
   inputSchema: { name: z.string() },
   handler: (ctx, { name }) => {
     const result = run(ctx, name);

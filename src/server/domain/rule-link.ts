@@ -8,7 +8,6 @@ export function linkSpans(text: string): [number, number][] {
   return [...text.matchAll(ruleLink())].map((m) => [m.index, m.index + m[0].length]);
 }
 
-// リンクを 1 本ずつ replace の戻り値に置き換える
 export function replaceRuleLinks(
   text: string,
   replace: (link: { whole: string; label: string; target: string }) => string,

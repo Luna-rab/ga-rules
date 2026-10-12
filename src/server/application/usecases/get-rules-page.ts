@@ -10,7 +10,6 @@ export type GetRulesPageResult =
   | { kind: "glossary"; glossary: GlossaryPage }
   | { kind: "page"; page: PageNode };
 
-// 引用 ID を渡されたら、# より前をページ ID として読む
 export function getRulesPage(ctx: ToolContext, pageIdOrCiteId: string): GetRulesPageResult {
   const pageId = pageIdOfCiteId(pageIdOrCiteId.trim());
   const entry = ctx.catalog.toc.find((e) => e.pageId === pageId);

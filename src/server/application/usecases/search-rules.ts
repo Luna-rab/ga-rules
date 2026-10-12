@@ -2,8 +2,8 @@ import type { ClauseHit, RulingHit } from "../../domain/model";
 import { searchWords } from "../../domain/search-terms";
 import type { ToolContext } from "../context";
 
-const CLAUSE_LIMIT = 7;
-const RULING_LIMIT = 3;
+export const CLAUSE_LIMIT = 7;
+export const RULING_LIMIT = 3;
 
 export type SearchRulesResult =
   | { kind: "no-words" }
