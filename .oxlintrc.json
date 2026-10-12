@@ -21,7 +21,7 @@
       }
     },
     {
-      "files": ["src/build/domain/**"],
+      "files": ["src/*/domain/**"],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -29,11 +29,11 @@
             "patterns": [
               {
                 "group": [
-                  "bun:sqlite",
-                  "node:*",
-                  "node:*/*",
                   "bun",
                   "bun/*",
+                  "bun:*",
+                  "node:*",
+                  "node:*/*",
                   "child_process",
                   "child_process/*",
                   "cluster",
@@ -83,15 +83,36 @@
                   "worker_threads",
                   "worker_threads/*",
                   "zlib",
-                  "zlib/*",
+                  "zlib/*"
+                ],
+                "message": "domain/ は入出力をしない。bun・Node の組み込みは infrastructure/ で使う"
+              },
+              {
+                "group": [
                   "drizzle-orm",
                   "drizzle-orm/*",
                   "drizzle-kit",
                   "drizzle-kit/*",
-                  "**/infrastructure",
-                  "**/infrastructure/**"
+                  "zod",
+                  "zod/*",
+                  "hono",
+                  "hono/*",
+                  "@modelcontextprotocol/**",
+                  "compromise",
+                  "compromise/*"
                 ],
-                "message": "domain/ は入出力をしない。bun・bun:sqlite・Node の組み込み・drizzle・infrastructure/ は infrastructure/ か build-index.ts で使う"
+                "message": "domain/ はライブラリに縛られない。ライブラリは infrastructure/ か presentation/ で使い、domain/ には型と関数だけを置く"
+              },
+              {
+                "group": [
+                  "**/application",
+                  "**/application/**",
+                  "**/infrastructure",
+                  "**/infrastructure/**",
+                  "**/presentation",
+                  "**/presentation/**"
+                ],
+                "message": "domain/ はほかの層を import しない。依存は外側の層から domain/ への一方向"
               }
             ]
           }
@@ -99,7 +120,48 @@
       }
     },
     {
-      "files": ["src/server/domain/**", "src/server/presentation/markdown/**"],
+      "files": ["src/*/application/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["bun", "bun/*", "bun:*", "node:*", "node:*/*"],
+                "message": "application/ は入出力をしない。入出力は ports.ts の型を通し、実装は infrastructure/ に置く"
+              },
+              {
+                "group": [
+                  "drizzle-orm",
+                  "drizzle-orm/*",
+                  "drizzle-kit",
+                  "drizzle-kit/*",
+                  "zod",
+                  "zod/*",
+                  "hono",
+                  "hono/*",
+                  "@modelcontextprotocol/**",
+                  "compromise",
+                  "compromise/*"
+                ],
+                "message": "application/ はライブラリに縛られない。ライブラリは infrastructure/ か presentation/ で使う"
+              },
+              {
+                "group": [
+                  "**/infrastructure",
+                  "**/infrastructure/**",
+                  "**/presentation",
+                  "**/presentation/**"
+                ],
+                "message": "application/ は外側の層を import しない。実装は組み立て役（build/index.ts・server/index.ts）が渡す"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/*/presentation/**"],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -110,10 +172,28 @@
                   "bun:sqlite",
                   "drizzle-orm",
                   "drizzle-orm/*",
+                  "compromise",
+                  "compromise/*",
                   "**/infrastructure",
                   "**/infrastructure/**"
                 ],
-                "message": "domain/ と presentation/markdown/ は DB を読まない。DB は infrastructure/sqlite/ で読み、presentation/mcp/tools/ から渡す"
+                "message": "presentation/ は DB や実装を直接使わない。application/ のユースケースとポートを通す。実装は組み立て役（server/index.ts）が渡す"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/*/infrastructure/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/presentation", "**/presentation/**"],
+                "message": "infrastructure/ は presentation/ を import しない。共有する型は domain/ か application/ に置く"
               }
             ]
           }
@@ -124,6 +204,28 @@
       "files": ["src/**/__tests__/**"],
       "rules": {
         "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["src/*/domain/**/__tests__/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "bun:sqlite",
+                  "drizzle-orm",
+                  "drizzle-orm/*",
+                  "**/infrastructure/sqlite",
+                  "**/infrastructure/sqlite/**"
+                ],
+                "message": "domain/ のテストはデータを直接渡して確かめる。DB を通すテストは infrastructure/ か presentation/ に置く"
+              }
+            ]
+          }
+        ]
       }
     }
   ],
