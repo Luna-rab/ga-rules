@@ -34,7 +34,7 @@ export const searchCards: ToolDefinition<typeof inputSchema> = {
     const parsed = parseCardQuery(args, ctx.catalog.attributes);
     if (!parsed.ok) return { text: parsed.message, isError: true, count: 0 };
 
-    const { total, hits } = ctx.cards.search(parsed.query);
+    const { total, hits } = ctx.cards.search(parsed.query, SEARCH_LIMIT);
     if (hits.length === 0) return { text: "No cards found.", count: 0 };
     const header =
       total > SEARCH_LIMIT

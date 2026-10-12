@@ -1,4 +1,4 @@
-export type NamedCard = { slug: string; name: string };
+import type { CardEntry } from "./model";
 
 const MAX_CANDIDATES = 10;
 const MIN_SIMILARITY = 0.75;
@@ -46,13 +46,13 @@ function matchesByPrefix(query: string[], name: string[]): boolean {
 // 先頭一致か、綴りの類似度が 0.75 以上のものを選ぶ。
 export function findSimilarCards(
   query: string,
-  cards: NamedCard[],
-): { cards: NamedCard[]; total: number } {
+  cards: CardEntry[],
+): { cards: CardEntry[]; total: number } {
   const q = nameWords(query);
   if (q.length === 0) return { cards: [], total: 0 };
   const qLength = q.join("").length;
 
-  const scored: { card: NamedCard; score: number }[] = [];
+  const scored: { card: CardEntry; score: number }[] = [];
   for (const card of cards) {
     const n = nameWords(card.name);
     const sim = similarity(q, n);

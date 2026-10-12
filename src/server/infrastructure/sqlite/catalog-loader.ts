@@ -11,8 +11,8 @@ import {
   termAlias,
   termDefinition,
 } from "../../../shared/infrastructure/sqlite/schema";
-import type { RuleRepository } from "../../application/ports";
 import type { Catalog, TermEntry } from "../../domain/model";
+import { createSqliteRuleRepository } from "./rule-repository";
 
 const StringArray = z.array(z.string());
 
@@ -20,7 +20,8 @@ function distinctSorted(values: Set<string>): string[] {
   return [...values].toSorted();
 }
 
-export function loadCatalog(db: Database, rules: RuleRepository): Catalog {
+export function loadCatalog(db: Database): Catalog {
+  const rules = createSqliteRuleRepository(db);
   const d = drizzle(db);
 
   const pages = d.select().from(rulePage).orderBy(asc(rulePage.position)).all();

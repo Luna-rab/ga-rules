@@ -9,7 +9,7 @@ import type {
 } from "../domain/model";
 
 export type RuleRepository = {
-  // 節と条文は文書の順。ページが無ければ null
+  // 節と条文は文書の順
   readPage: (pageId: string) => PageNode | null;
   // words のどれか 1 語を含む条文を関連度順に
   searchClauses: (words: string[], limit: number) => ClauseHit[];
@@ -20,8 +20,7 @@ export type RuleRepository = {
 export type CardRepository = {
   // 渡した slug の順に並べる。索引に無い slug は飛ばす
   readSummaries: (slugs: string[]) => CardSummary[];
-  // 条件をすべて満たすカードの総件数と、先頭 SEARCH_LIMIT 件。語があれば関連度順、無ければ名前順
-  search: (q: CardQuery) => { total: number; hits: CardHit[] };
-  // slug のカードが無ければ null
+  // 条件をすべて満たすカードの総件数と、先頭 limit 件。語があれば関連度順、無ければ名前順
+  search: (q: CardQuery, limit: number) => { total: number; hits: CardHit[] };
   readDetail: (slug: string) => CardDetail | null;
 };

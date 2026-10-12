@@ -59,7 +59,7 @@ function pick(values: string[], given: string): string | null {
   return values.find((v) => v.toLowerCase() === lower) ?? null;
 }
 
-// 文字と数字の語に分ける。記号は検索の式に渡さない。語が無ければ null
+// 記号は検索の式に渡さない
 function textWords(text: string): string[] | null {
   return text.match(/[\p{L}\p{N}]+/gu);
 }

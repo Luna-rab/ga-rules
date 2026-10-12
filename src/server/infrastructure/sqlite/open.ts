@@ -10,11 +10,10 @@ export function openIndexDatabase(indexPath: string): Database {
 }
 
 export function createToolContext(db: Database): ToolContext {
-  const rules = createSqliteRuleRepository(db);
   return {
-    rules,
+    rules: createSqliteRuleRepository(db),
     cards: createSqliteCardRepository(db),
-    catalog: loadCatalog(db, rules),
+    catalog: loadCatalog(db),
     termKeys,
   };
 }

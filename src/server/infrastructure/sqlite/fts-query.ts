@@ -1,6 +1,6 @@
-// 語の並びを FTS5 の MATCH の式にする。語は全部クォートするので、AND・NEAR・- や括弧が構文として読まれない。
-// 語は英数字だけ（domain/search-terms.ts・domain/card-query.ts が分ける）なので、語の中に " は無い。
-const quote = (w: string) => `"${w}"`;
+// 語の並びを FTS5 の MATCH の式にする。語は全部クォートし、語の中の " は "" に重ねるので、
+// AND・NEAR・- や括弧が構文として読まれない。空の並びは式にならないので、呼ぶ側で除く
+const quote = (w: string) => `"${w.replaceAll('"', '""')}"`;
 
 export const anyWord = (words: string[]): string => words.map(quote).join(" OR ");
 

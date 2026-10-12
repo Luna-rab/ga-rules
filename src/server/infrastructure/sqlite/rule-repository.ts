@@ -11,8 +11,10 @@ import { anyWord } from "./fts-query";
 export function createSqliteRuleRepository(db: Database): RuleRepository {
   return {
     readPage: (pageId) => readPage(db, pageId),
-    searchClauses: (words, limit) => searchClauses(db, anyWord(words), limit),
-    searchRulings: (words, limit) => searchRulings(db, anyWord(words), limit),
+    searchClauses: (words, limit) =>
+      words.length === 0 ? [] : searchClauses(db, anyWord(words), limit),
+    searchRulings: (words, limit) =>
+      words.length === 0 ? [] : searchRulings(db, anyWord(words), limit),
   };
 }
 

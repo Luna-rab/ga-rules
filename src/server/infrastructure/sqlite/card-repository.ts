@@ -16,14 +16,14 @@ import {
   termDefinition,
 } from "../../../shared/infrastructure/sqlite/schema";
 import type { CardRepository } from "../../application/ports";
-import { type CardQuery, SEARCH_LIMIT } from "../../domain/card-query";
+import type { CardQuery } from "../../domain/card-query";
 import type { CardDetail, CardHit, CardSummary } from "../../domain/model";
 import { allWords } from "./fts-query";
 
 export function createSqliteCardRepository(db: Database): CardRepository {
   return {
     readSummaries: (slugs) => readCardSummaries(db, slugs),
-    search: (q) => searchCardRows(db, q),
+    search: (q, limit) => searchCardRows(db, q, limit),
     readDetail: (slug) => readCardDetail(db, slug),
   };
 }
@@ -119,13 +119,16 @@ function conditions(q: CardQuery): SQL[] {
 const EFFECT_COLUMN = 1;
 const HIGHLIGHT = "**";
 
-// 条件をすべて満たすカードの総件数と、先頭 SEARCH_LIMIT 件。
-// 全文検索があれば関連度順、無ければ名前順。
-function searchCardRows(db: Database, q: CardQuery): { total: number; hits: CardHit[] } {
+function searchCardRows(
+  db: Database,
+  q: CardQuery,
+  limit: number,
+): { total: number; hits: CardHit[] } {
   const d = drizzle(db);
   const where = conditions(q);
 
-  if (q.words === null) {
+  // 語が無ければ全文検索の条件を付けない。空の MATCH は FTS5 の構文の誤りになる
+  if (q.words === null || q.words.length === 0) {
     const total = d
       .select({ n: count() })
       .from(card)
@@ -136,7 +139,7 @@ function searchCardRows(db: Database, q: CardQuery): { total: number; hits: Card
       .from(card)
       .where(and(...where))
       .orderBy(asc(card.name), asc(card.slug))
-      .limit(SEARCH_LIMIT)
+      .limit(limit)
       .all();
     return {
       total: total?.n ?? 0,
@@ -159,7 +162,7 @@ function searchCardRows(db: Database, q: CardQuery): { total: number; hits: Card
           FROM card_fts JOIN ${card} ON card.rowid = card_fts.rowid
           WHERE card_fts MATCH ${match} AND ${and(...where) ?? sql`1`}
           ORDER BY bm25(card_fts), ${card.name}, ${card.slug}
-          LIMIT ${SEARCH_LIMIT}`,
+          LIMIT ${limit}`,
     )
     .map((r) => z.object({ slug: z.string(), snippet: z.string().nullable() }).parse(r));
   const bySlug = new Map(

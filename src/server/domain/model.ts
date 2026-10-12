@@ -1,5 +1,3 @@
-// サーバーが索引から読んで扱うデータの形。索引の列ではなく、ツールが使う形にしてある。
-
 // キーは page_id と section_id、値は公式サイトの URL
 export type RuleUrls = ReadonlyMap<string, string>;
 
