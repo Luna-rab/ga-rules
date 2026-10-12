@@ -6,7 +6,6 @@ import { fileURLToPath } from "node:url";
 // 一時ファイルが残ると bun run lint が落ちるので、成否にかかわらず必ず消す。
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
-const PROBE = "__lint_boundary_probe__.ts";
 
 const FORBIDDEN: { label: string; code: string }[] = [
   {
@@ -38,7 +37,8 @@ function lintProbe(
 ): { exitCode: number; output: string } {
   const abs = `${ROOT}src/build/${dir}`;
   const createdDir = !existsSync(abs);
-  const rel = `src/build/${dir}/${PROBE}`;
+  // 名前を毎回変える。同じ名前だと、同時に流れた別の実行が finally で消し、oxlint が空振りして通る
+  const rel = `src/build/${dir}/__lint_boundary_probe_${crypto.randomUUID()}__.ts`;
   try {
     mkdirSync(abs, { recursive: true });
     writeFileSync(`${ROOT}${rel}`, code);

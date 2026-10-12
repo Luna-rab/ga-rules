@@ -7,13 +7,11 @@ import { fileURLToPath } from "node:url";
 // 一時ファイルが残ると bun run lint が落ちるので、成否にかかわらず必ず消す。
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
-const PROBE = "__lint_boundary_probe__.ts";
 
 type Dir = "domain" | "presentation/markdown" | "infrastructure/sqlite" | "presentation/mcp/tools";
 
 const CATALOG = "infrastructure/sqlite/catalog-loader";
 
-// 置いたディレクトリから見た相対パスで catalog-loader を import する
 function catalogImport(dir: Dir): string {
   const spec = relative(dir, CATALOG);
   return `import { loadCatalog } from "${spec.startsWith(".") ? spec : `./${spec}`}";\nexport const used = loadCatalog;\n`;
@@ -39,7 +37,8 @@ const FORBIDDEN: { label: string; code: (dir: Dir) => string }[] = [
 function lintProbe(dir: Dir, code: string): { exitCode: number; output: string } {
   const abs = `${ROOT}src/server/${dir}`;
   const createdDir = !existsSync(abs);
-  const rel = `src/server/${dir}/${PROBE}`;
+  // 名前を毎回変える。同じ名前だと、同時に流れた別の実行が finally で消し、oxlint が空振りして通る
+  const rel = `src/server/${dir}/__lint_boundary_probe_${crypto.randomUUID()}__.ts`;
   try {
     mkdirSync(abs, { recursive: true });
     writeFileSync(`${ROOT}${rel}`, code);
