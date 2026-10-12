@@ -120,7 +120,7 @@ export async function fetchData(): Promise<FetchedSource> {
 
   const [rulesCommit, cardCount] = await Promise.all([fetchRules(), fetchCards()]);
 
-  const source = {
+  const source: FetchedSource = {
     rules: { repo: RULES_REPO, commit: rulesCommit },
     cards: { count: cardCount },
     fetchedAt: new Date().toISOString(),

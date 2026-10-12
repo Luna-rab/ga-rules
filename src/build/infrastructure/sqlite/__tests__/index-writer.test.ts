@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { Card } from "../../../domain/model";
 import type { Relations } from "../../../domain/relate";
 import type { IndexData } from "../../../application/ports";
-import { writeIndex } from "../index-writer";
+import { createSqliteIndexWriter } from "../index-writer";
 
 let dir: string;
 let outPath: string;
@@ -140,7 +140,7 @@ async function rejection(p: Promise<unknown>): Promise<unknown> {
   );
 }
 
-describe("writeIndex: ページと節の URL", () => {
+describe("createSqliteIndexWriter:ページと節の URL", () => {
   test("Page.url・Section.url がそのまま rule_page.url・rule_section.url に入る", async () => {
     const base = data();
     const page = base.pages[0];
@@ -156,7 +156,7 @@ describe("writeIndex: ページと節の URL", () => {
         },
       ],
     };
-    await writeIndex(outPath, withUrls);
+    await createSqliteIndexWriter(outPath).write(withUrls);
     const db = open();
     expect(db.query("SELECT page_id, url FROM rule_page").all()).toEqual([
       { page_id: PAGE_ID, url: "https://rules.gatcg.com/dir/p" },
@@ -167,9 +167,9 @@ describe("writeIndex: ページと節の URL", () => {
   });
 });
 
-describe("writeIndex: 各テーブルの行", () => {
+describe("createSqliteIndexWriter:各テーブルの行", () => {
   test("ページ・節・条文・条文のリンクを書く", async () => {
-    await writeIndex(outPath, data());
+    await createSqliteIndexWriter(outPath).write(data());
     const db = open();
 
     expect(db.query("SELECT page_id, title FROM rule_page").all()).toEqual([
@@ -192,7 +192,7 @@ describe("writeIndex: 各テーブルの行", () => {
   });
 
   test("用語・別名・定義を書き、ページ全体の定義は section_id が NULL", async () => {
-    await writeIndex(outPath, data());
+    await createSqliteIndexWriter(outPath).write(data());
     const db = open();
 
     expect(db.query("SELECT term_id, name FROM term").all()).toEqual([
@@ -207,7 +207,7 @@ describe("writeIndex: 各テーブルの行", () => {
   });
 
   test("カード 2 枚を書き、types・cost・legality は JSON 文字列で入る", async () => {
-    await writeIndex(outPath, data());
+    await createSqliteIndexWriter(outPath).write(data());
     const db = open();
 
     type Row = {
@@ -254,7 +254,7 @@ describe("writeIndex: 各テーブルの行", () => {
   });
 
   test("裁定を書く", async () => {
-    await writeIndex(outPath, data());
+    await createSqliteIndexWriter(outPath).write(data());
     const db = open();
 
     expect(
@@ -273,7 +273,7 @@ describe("writeIndex: 各テーブルの行", () => {
   });
 
   test("結び付きを 1 件ずつ各テーブルに書く", async () => {
-    await writeIndex(outPath, data());
+    await createSqliteIndexWriter(outPath).write(data());
     const db = open();
 
     expect(db.query("SELECT clause_id, term_id FROM clause_term").all()).toEqual([
@@ -297,9 +297,9 @@ describe("writeIndex: 各テーブルの行", () => {
   });
 });
 
-describe("writeIndex: FTS", () => {
+describe("createSqliteIndexWriter:FTS", () => {
   test("rule_clause_fts の MATCH で条文が引ける", async () => {
-    await writeIndex(outPath, data());
+    await createSqliteIndexWriter(outPath).write(data());
     const db = open();
 
     const rows = db
@@ -313,7 +313,7 @@ describe("writeIndex: FTS", () => {
   });
 
   test("card_fts の MATCH で名前と effect_raw からカードが引ける", async () => {
-    await writeIndex(outPath, data());
+    await createSqliteIndexWriter(outPath).write(data());
     const db = open();
 
     const match = (q: string) =>
@@ -330,7 +330,7 @@ describe("writeIndex: FTS", () => {
   });
 
   test("card_ruling_fts の MATCH で裁定が引ける", async () => {
-    await writeIndex(outPath, data());
+    await createSqliteIndexWriter(outPath).write(data());
     const db = open();
 
     const rows = db
@@ -344,14 +344,16 @@ describe("writeIndex: FTS", () => {
   });
 });
 
-describe("writeIndex: 失敗したとき", () => {
+describe("createSqliteIndexWriter:失敗したとき", () => {
   const missing = "no-such-page#General Rules:1";
 
   test.each<[string, Partial<Relations>]>([
     ["clauseTerms", { clauseTerms: [{ clauseId: missing, termId: 1 }] }],
     ["clauseCards", { clauseCards: [{ clauseId: missing, cardSlug: "fractured-memories" }] }],
   ])("%s に存在しない clauseId があると失敗し、outPath は作られない", async (_name, relations) => {
-    expect(await rejection(writeIndex(outPath, data(relations)))).toBeInstanceOf(Error);
+    expect(await rejection(createSqliteIndexWriter(outPath).write(data(relations)))).toBeInstanceOf(
+      Error,
+    );
     expect(existsSync(outPath)).toBe(false);
   });
 
@@ -359,7 +361,7 @@ describe("writeIndex: 失敗したとき", () => {
     writeFileSync(outPath, "previous index");
 
     const bad = data({ clauseTerms: [{ clauseId: missing, termId: 1 }] });
-    expect(await rejection(writeIndex(outPath, bad))).toBeInstanceOf(Error);
+    expect(await rejection(createSqliteIndexWriter(outPath).write(bad))).toBeInstanceOf(Error);
 
     expect(existsSync(outPath)).toBe(true);
     expect(readFileSync(outPath, "utf8")).toBe("previous index");
