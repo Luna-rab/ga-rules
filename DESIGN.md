@@ -59,7 +59,7 @@ flowchart LR
   - Cloudflare Workers + D1: SQLite の拡張を載せられない。
 - 濫用への備えは 3 段。Cloud Run は CPU・メモリのほかに、リクエスト数（100 万件 $0.40）と外向きの転送量にも課金し、この 2 つは台数と関係なく捌いた件数だけ増える。手元の計測で `get_game_overview` は 1 秒 3,400 件・1 件 25KB を返せるので、最大 1 台でも叩き続けられると月数千ドルになる。
   1. 最大インスタンス数を 1 にする。CPU とメモリの料金が 1 台分（月 $60 前後）に収まり、メモリで数える回数制限が全リクエストを数えられる。
-  2. サーバーで回数を制限する（`src/server/rate-limit.ts`）。IP ごとに 1 分 120 件、全体で 1 秒 10 件。断った応答は約 100 バイトなので、外向きの転送量の料金がほぼ消える。リクエストは Anthropic / OpenAI のクラウドのわずかな IP から全利用者分が届くので、IP ごとの枠は緩くし、全体の枠で抑える。IP は `X-Forwarded-For` の右端（Cloud Run の前段が足す値）から取る。左側は送信元が自由に書ける。
+  2. サーバーで回数を制限する（`src/server/presentation/http/rate-limit.ts`）。IP ごとに 1 分 120 件、全体で 1 秒 10 件。断った応答は約 100 バイトなので、外向きの転送量の料金がほぼ消える。リクエストは Anthropic / OpenAI のクラウドのわずかな IP から全利用者分が届くので、IP ごとの枠は緩くし、全体の枠で抑える。IP は `X-Forwarded-For` の右端（Cloud Run の前段が足す値）から取る。左側は送信元が自由に書ける。
   3. 予算 ¥1,000 を超えたら止める。予算の通知（Pub/Sub）を Eventarc が受け、Workflows が Cloud Run の ingress を内部だけに切り替える。コンテナに届いたリクエストは断っても課金されるので、リクエスト数の料金はここでしか止まらない。予算の集計は数時間遅れるので、止まるまでの分は掛かる。予算の通貨は請求先アカウントの通貨（JPY）と揃えないと作れない。
 - 採らなかった備え
   - Cloudflare の無料プランのレート制限: 送信元 IP ごとにしか数えられず、全利用者を 1 つの枠にまとめてしまう。
@@ -117,19 +117,52 @@ Dockerfile
 src/
   server/         Hono + MCP。イメージの 2 段目に入る
   build/          取得 → index.sqlite。イメージの 1 段目だけで動く
-  shared/         テーブル定義・引用 ID。両方の段に入る
+  shared/         テーブル定義・引用 ID・用語のキー。両方の段に入る
 ```
+
+テストは各ディレクトリの `__tests__/` に置く。
 
 - Bun のバージョンは `package.json` の `packageManager` を正とし、CI の `setup-bun` と Dockerfile の `oven/bun` のタグを合わせる。
 - 採らなかった構成: Bun workspaces で 3 パッケージに分ける。取り込みは `fetch` と `bun:sqlite` で書け、分ける依存がほぼ無い。設定ファイルが 3 組になるだけ。
 
+### コードの層
+
+`src/build/`・`src/server/`・`src/shared/` の中を、同じ 4 つの層に分ける。ライブラリを使ってよい層を決め、処理の手順とゲームの規則をライブラリから切り離す。取得元・データベース・自然言語処理のライブラリ・MCP の SDK を替えるとき、直すのを `infrastructure/`・`presentation/` と組み立て役に限る。
+
+| 層                | 置くもの                                                            | 使ってよいライブラリ                |
+| ----------------- | ------------------------------------------------------------------- | ----------------------------------- |
+| `domain/`         | ルール文書・カードの型と、データを受け取ってデータを返す関数        | なし                                |
+| `application/`    | 処理の手順（ユースケース）と、入出力の型（`ports.ts`）              | なし                                |
+| `infrastructure/` | `ports.ts` の実装。ファイル・SQLite・HTTP での取得・compromise      | bun・Node・drizzle・zod・compromise |
+| `presentation/`   | サーバーだけ。MCP のツール定義・HTTP・Markdown への整形             | zod・hono・MCP SDK                  |
+| 組み立て役        | `build/index.ts`・`server/index.ts`。実装を作り、ユースケースに渡す | すべて                              |
+
+```mermaid
+flowchart LR
+    M[index.ts<br/>組み立て役] --> P[presentation/]
+    M --> I[infrastructure/]
+    P --> A[application/]
+    I --> A
+    A --> D[domain/]
+    P --> D
+    I --> D
+```
+
+- 依存は図の矢印の向きだけ。逆向きの import と、表に無いライブラリの import は、oxlint の `no-restricted-imports`（`.oxlintrc.json` の `overrides`）で `bun run check` が失敗する。各層で禁じた import が本当に落ちることは `src/shared/__tests__/lint-boundary.test.ts` が確かめる。分けたつもりでも、守らせる仕組みが無いと崩れる。
+- `domain/` と `application/` では、グローバルの `Bun`・`process`・`fetch` も `no-restricted-globals` で禁じる。import の制限では止まらない。動的な `import()` と `require()` はどちらでも止まらないので使わない。
+- パッケージの間でも、`shared/` は `build/`・`server/` を、`build/` と `server/` は互いを import しない。Docker の段に入れるファイルを `build/`・`server/`・`shared/` の単位で選んでいるので、逆向きの import は段に要るファイルを欠けさせる。
+- `__tests__/` は層の制限から外す。テストは実装をつないで確かめる。ただし `domain/` のテストは DB を通さず、データを直接渡す。
+- ポート（`ports.ts` の型）は関数を並べたオブジェクトの型にし、実装は `create〜` の関数が返す。クラスと DI コンテナは使わない。実装は今どれも 1 つで、テストも実データで回すので差し替えはしないが、ライブラリの呼び出しが処理の途中に紛れ込まないよう境界を置く。
+- 用語のキー（単数形・原形にそろえた語）は、索引ビルドとサーバーが同じものを使わないと、ビルドがまとめた用語に `get_term` の入力が当たらない。両方とも `src/shared/infrastructure/nlp/compromise-inflector.ts` の `termKeys` を使う。
+- 採らなかった構成: `src/` の最上位を層にする（`src/domain/build/` など）。Docker の 1 段目と 2 段目に入れるファイルを `build/`・`server/`・`shared/` の単位で選んでいる。最上位を層にすると、`drizzle-kit` のようなビルドだけの依存がサーバーの段に混ざらないよう、選び方を作り直すことになる。
+
 ### 索引ビルドのコード構成
 
-`src/build/` を、ビジネスロジック（`domain/`）と入出力（`infra/`）の 2 層に分ける。誤りの修正・条文への分解・用語の照合・結び付きの生成は、データを受け取ってデータを返す関数にし、取得元やデータベースから切り離して文字列だけでテストできるようにする。
+誤りの修正・条文への分解・用語の照合・結び付きの生成は `domain/` の関数にし、取得元やデータベースから切り離して文字列だけでテストできるようにする。
 
 ```
 src/build/
-  domain/                 純粋な関数と型だけ。入出力をしない
+  domain/                 純粋な関数と型だけ
     model.ts              Page / Section / Clause / Term / Card / Ruling などの型
     errors.ts             DataError
     corrections/          修正の一覧（データ）と適用
@@ -138,70 +171,61 @@ src/build/
     terms/                用語・別名・定義の場所の抽出、照合器
     faces.ts              両面カードの裏面を card の行に並べる
     relate.ts             条文・カード・裁定と、用語・カード名を結ぶ
-  infra/                  外とのやりとりだけ
-    fetch/                GitHub と api.gatcg.com からの取得（bun run fetch:data）
-    raw-store.ts          data/ の読み書き
-    index-writer.ts       drizzle で index.sqlite に書き込み、FTS5 を作る
-  build-index.ts          組み立て役。infra で読む → domain で変換する → infra で書く
-src/shared/db/schema.ts   drizzle のテーブル定義（infra とサーバーが使う）
-src/shared/db/fts.ts      FTS5 の仮想テーブルの SQL
-src/shared/cite.ts        引用 ID の組み立てと解釈
+  application/
+    ports.ts              RawSource（data/ を読む）・IndexWriter（索引を書く）
+    build-index.ts        読む → 直す → 分解する → 結ぶ → 書く の手順
+  infrastructure/
+    fetch/                GitHub と api.gatcg.com からの取得
+    raw-store/            data/ の読み出し（RawSource の実装）と、カードの JSON の検査
+    sqlite/               drizzle で index.sqlite に書き、FTS5 を作る（IndexWriter の実装）
+  index.ts                組み立て役。bun run build:index
+  fetch-data.ts           bun run fetch:data
+src/shared/
+  domain/                 引用 ID・公式サイトの URL・用語のキー・hint のラベル・概要のページ ID
+  infrastructure/
+    sqlite/schema.ts      drizzle のテーブル定義（索引ビルドとサーバーが使う）
+    sqlite/fts.ts         FTS5 の仮想テーブルの SQL
+    nlp/                  compromise で語形を変える Inflector の実装と、それで作った termKeys
 ```
 
-```mermaid
-flowchart LR
-    E[build-index.ts] --> I[infra/]
-    E --> D[domain/]
-    I --> D
-    D -.->|import 禁止| I
-```
-
-- 依存は `infra/` → `domain/` の一方向。`domain/` から `bun:sqlite`・`node:*`・`drizzle-orm`・`infra/` を import すると、oxlint の `no-restricted-imports`（`.oxlintrc.json` の `overrides`）で `bun run check` が失敗する。分けたつもりでも、守らせる仕組みが無いと崩れる。
-- drizzle のスキーマはテーブルの形でありインフラの関心事なので、`domain/` は参照しない。`domain/` の型から行への変換は `index-writer.ts` で行う。
+- drizzle のスキーマはテーブルの形でありインフラの関心事なので、`domain/` は参照しない。`domain/` の型から行への変換は `infrastructure/sqlite/index-writer.ts` で行う。
 - 結び付きは TypeScript でメモリ上に作ってから書き込む。データはカード 1.8MB・ルール 0.7MB でメモリに載る。照合の規則（長い語から先に当てる・複数形・単語境界・別名）は SQL では書きにくく、FTS の語幹照合では「`Element Bonus` の中の `Element` を数えない」を表せない。
 - テーブルを作る SQL は、ビルドのたびに `drizzle-kit/api` の `generateSQLiteMigration` で、空の状態から現在のスキーマまでの差分として作る。索引は毎回作り直すのでマイグレーションの履歴は意味を持たず、SQL のファイルを持たなければ生成し忘れも起きない。`drizzle-kit/api` はコマンドラインほど文書化されていないので、生成した SQL でテーブルが作れることをテストで確かめる。`drizzle-kit` は開発用の依存なので、Docker の 1 段目だけ開発用の依存も入れる。
-- FTS5 の仮想テーブルは drizzle が扱えないので、SQL を手で書く（`src/shared/db/fts.ts`）。
-- 異常は最初の 1 件で `DataError` を投げて止め、`index.sqlite` は書き込まない。
+- FTS5 の仮想テーブルは drizzle が扱えないので、SQL を手で書く（`src/shared/infrastructure/sqlite/fts.ts`）。
+- 異常は最初の 1 件で `DataError` を投げて止め、`index.sqlite` は書き込まない。`buildIndex` は検査をすべて済ませてから `IndexWriter.write` を呼ぶ。
 - クラスは照合器の 1 つだけ（組み立てた正規表現を持ち回す）。ほかは関数と型で組む。
-- 採らなかった構成
-  - ポート（リポジトリのインターフェース）・ユースケースのクラス・依存性の注入。取得元も書き込み先も実装が 1 つずつで、テストでも差し替えない。`domain/` は入出力をしないので、テストはデータを直接渡せば足りる。
-  - 層を分けず 1 ディレクトリに関数を並べる。入出力をしない関数に、いつの間にか `bun:sqlite` が混ざっても気づけない。
 
 ### サーバーのコード構成
 
-サーバーは書き込まない。1 回のツール呼び出しでするのは「入力を読み解く → DB から読む → Markdown に整える」だけで、守るべき業務の規則が無い。この 3 つで `src/server/` を分ける。
+サーバーは書き込まない。1 回のツール呼び出しでするのは「入力を読み解く → DB から読む → Markdown に整える」。
 
 ```
 src/server/
-  index.ts        起動。DB を読み取り専用で開き、catalog を読み、Hono に渡す
-  app.ts          Hono の /mcp
-  mcp.ts          組み立て役。McpServer を作り、tools/ を登録する
-  tools/          1 ツール 1 ファイル。名前・説明文・zod の入力スキーマと、lookup → read → render をつなぐ handler
-  read/           DB を読む関数。素のオブジェクトを返す
-    catalog.ts    起動時に 1 回読む、変わらないデータ
-  lookup/         入力を読み解く純粋な関数（カード名の類似度・検索語の分解・属性の値の照合）
-  render/         素のオブジェクト → Markdown の純粋な関数
-  log.ts          1 呼び出し 1 行の JSON
+  domain/
+    model.ts        読み出した結果の型（CardDetail・PageNode・Catalog など）
+    *.ts            入力を読み解く純粋な関数（カード名の類似度・検索語の分解・属性の値の照合・用語の照合）
+  application/
+    ports.ts        RuleRepository・CardRepository・ToolCallLogger
+    context.ts      ツールが受け取るもの（リポジトリ・catalog・用語のキー）
+    usecases/       1 ツール 1 ファイル。結果を kind で分けたオブジェクトで返し、文言は作らない
+  infrastructure/
+    sqlite/         リポジトリの実装・起動時に読む catalog・FTS5 の MATCH の式
+    logging/        1 呼び出し 1 行の JSON を標準出力に書く
+  presentation/
+    mcp/            McpServer の組み立てと、ツールの名前・説明文・zod の入力スキーマ・結果の文言
+    markdown/       結果 → Markdown の純粋な関数
+    http/           Hono の /mcp と回数の制限
+  index.ts          組み立て役。DB を読み取り専用で開き、実装をつないで Hono に渡す
 ```
 
-```mermaid
-flowchart LR
-    T[tools/*] --> L[lookup/]
-    T --> R[read/]
-    T --> V[render/]
-    R --> C[(index.sqlite)]
-    L -.->|import 禁止| R
-    V -.->|import 禁止| R
-```
-
-- `lookup/` と `render/` から `bun:sqlite`・`drizzle-orm`・`read/` を import すると、oxlint の `no-restricted-imports` で失敗する。整形の途中で「ついでに 1 件引く」SQL が紛れ込むのを防ぐ。
+- 利用者に返す英語の文言と Markdown は `presentation/` で作る。案内にツール名（「Find slugs with find_cards」）が入り、MCP の都合で決まるため。ユースケースは結果の種類とデータだけを返す。
+- ツールの説明文にある件数（「up to 7 rule clauses」）は、ユースケースの定数から作る。説明文と実際の件数がずれない。
+- FTS5 の `MATCH` の式は `infrastructure/sqlite/fts-query.ts` だけが作る。`domain/` は検索語を語の並びにして返す。リポジトリは空の並びと `"` を含む語を自分で処理し、FTS5 の構文の誤りにしない。
 - データはプロセスが動いている間変わらないので、カード名の一覧（`find_cards` の類似度）・属性の値の一覧（`search_cards` の照合と候補）・用語と別名・目次と概要は起動時に `catalog` へ読み、全リクエストで使い回す。作り直す仕組みは要らない。
-- `render/` は複数のツールで共有する。「条文に引用 ID を付けて並べる」は `get_rules_page`・`get_term`・`get_card`・`get_game_overview` が、「カードを 1 行にする」は `search_cards`・`find_cards` が使う。
+- `presentation/markdown/` は複数のツールで共有する。「条文に引用 ID を付けて並べる」は `get_rules_page`・`get_term`・`get_card`・`get_game_overview` が、「カードを 1 行にする」は `search_cards`・`find_cards` が使う。
 - 読み出しは drizzle で書き、FTS5 の `MATCH`・`bm25`・`snippet` だけ `sql` のテンプレートで書く。
 - ツールを 1 回呼ぶごとに、ツール名・引数・件数・所要時間を JSON 1 行で標準出力に書く。Cloud Run が Cloud Logging に取り込むので、件数 0 で絞れば該当なしの呼び出しが集まる（「検証」の運用）。
 - 採らなかった構成
-  - ポート・ユースケースのクラス・依存性の注入。読み出し先は SQLite 1 つで、テストも実データで回すので差し替える相手がいない。
-  - 索引ビルドと同じ `domain/` と `infra/`。サーバーには業務の規則が無く、`domain/` に入るのが整形と照合だけになる。
   - ツールごとのディレクトリ（`tools/get-card/{read,render}.ts`）。整形の半分以上が複数のツールで共有され、結局共有の置き場が要る。
   - ツール 1 ファイルに SQL も整形も書く。「条文に ID を付けて並べる」が 4 か所に書かれ、表記がずれていく。
 
@@ -258,7 +282,7 @@ flowchart LR
 
 - 4 つを `bun run check` にまとめ、GitHub Actions で PR と main への push のたびに実行する。手元では devcontainer の `oxc.oxc-vscode` で保存時に整形する。pre-commit フックは置かない。
 - サーバーのテストは CI で回さず、手元で `bun run test:server` を実データの `index.sqlite` に対して回す。CI には `data/` が無く、取得すると外部につなぐ 40 秒が毎回かかり、取得先の更新で結果が変わる。`index.sqlite` が無ければ飛ばさずに失敗させ、`fetch:data` と `build:index` を案内する。黙って飛ばすと通ったと思い込む。フォーマット・リント・型はサーバーのコードにも CI でかける。
-- サーバーのテストは主に `tools/` の handler を直接呼んで返る文字列を確かめ、HTTP を通すテストは配線の確認に 1〜2 本だけ置く。
+- サーバーのテストは主に `presentation/mcp/tools/` の handler を直接呼んで返る文字列を確かめ、HTTP を通すテストは配線の確認に 1〜2 本だけ置く。テストは出力を索引と突き合わせるので、`openTestContext` はツールが受け取るものに加えて `db` も返す。
 - Bun は型を見ずに実行し、oxlint・oxfmt も型を検査しないので、`tsc` を別に回す。
 - `oxlint-tsgolint` を入れるのは `no-floating-promises` などを動かすため。`await` を書き忘れると、取得のエラーが握りつぶされて件数の足りない DB ができる。
 
@@ -268,7 +292,7 @@ flowchart LR
 
 1. 先頭の YAML（`---` で囲まれた GitBook のページ設定。3 ページにある）を捨てる。
 2. `{% hint style="..." %}` ブロックを、直前の条文の続きとして本文に残す。`warning` / `danger` は「Exception:」、`info` / `success` は「Example:」を頭に付ける。ルール文書は英語なので、ラベルも英語にする。**hint には条文を打ち消す例外が入っている**（例: `game-mechanics-damage.md` の規則 13 と、その直後の Immortality の例外）。捨てたり条文と切り離したりすると誤答になる。
-   - hint の本文は 1 行にまとめる。`search_rules` は条文を 1 行で見せるので、行頭の「Example:」「Exception:」で hint を見分け、「Example:」は外し「Exception:」は ` / Exception: ...` と区切って残す。ラベルはビルドとサーバーで食い違わないよう `src/shared/hint.ts` の定数を両方が使う。
+   - hint の本文は 1 行にまとめる。`search_rules` は条文を 1 行で見せるので、行頭の「Example:」「Exception:」で hint を見分け、「Example:」は外し「Exception:」は ` / Exception: ...` と区切って残す。ラベルはビルドとサーバーで食い違わないよう `src/shared/domain/hint.ts` の定数を両方が使う。
    - 本文頭の `E.g.,` は消す（「Example: E.g.,」と重ねない）。画像と斜体の説明文だけの hint は、画像を消すと説明する相手が無いので捨てる。
 3. GitBook と Markdown の記法を消す。条文の本文はモデルがそのまま読むので、記法が残ると文の一部に見える。
    - `<img>` タグ・Markdown の画像（`![](...)`）・`<br>`・`&#x20;`・行末の `\`（強制改行）・エスケープの `\`。画像はモデルに渡さない。
@@ -290,7 +314,7 @@ flowchart LR
    - リンクの文字列の前後の空白はリンクの外に出す（`[Loaded Cards ](...)zone` → `[Loaded Cards](...) zone`）。文字列がファイル名のリンク（GitBook のページへの mention、`[game-terms.md](...)`）は、文字列をリンク先のページ題にする。
 7. ページ・節・条文に並び順（`position`）を振る。ページの順と親子は目次 `SUMMARY.md` の入れ子から取り、`rule_page.parent_page_id` に持つ。`get_game_overview` の目次と、`get_rules_page` が条文からページを組み立て直すのに使う。条文の番号を文字列で並べると `10` が `2` より前に来るので、番号では並べない。
 8. ページの原文は持たない。`get_rules_page` は条文から組み立て直し、条文ごとに引用 ID を付けて返す。原文の行は、手順 3 で捨てるものを除いてすべて条文か節の見出しに入る（太字の小見出し `**1.1 Announcing Activation**` も節になる）ことを全 108 ページで確かめた。
-   - ページと節に公式サイト（rules.gatcg.com）の URL を作り、`rule_page.url`・`rule_section.url` に持つ。ページは `data/rules` のパスから `.md` を外したもの（`.../README.md` はディレクトリのパス）。`####`・`###` の節はページ URL + `#anchor`（見出しの `<a id>` の先頭、無ければ `gitbookAnchor(見出し)`）。太字の小見出しの節と、最初の見出しより前の lead 節は、サイト上にこれらの anchor が無いので `#` なしのページ URL にする。条文は属する節の URL を使う。組み立ては `src/shared/site-url.ts`。
+   - ページと節に公式サイト（rules.gatcg.com）の URL を作り、`rule_page.url`・`rule_section.url` に持つ。ページは `data/rules` のパスから `.md` を外したもの（`.../README.md` はディレクトリのパス）。`####`・`###` の節はページ URL + `#anchor`（見出しの `<a id>` の先頭、無ければ `gitbookAnchor(見出し)`）。太字の小見出しの節と、最初の見出しより前の lead 節は、サイト上にこれらの anchor が無いので `#` なしのページ URL にする。条文は属する節の URL を使う。組み立ては `src/shared/domain/site-url.ts`。
 9. 概要に抜き出す 5 ページ（「最初に渡すゲームの概要」）のどれかが無ければビルドを止める。
 
 ### カードの取り込み
@@ -327,7 +351,7 @@ flowchart LR
   - 見出しから機械的に名前を作る。`<a id>` を外し、末尾の ` N`（`Critical N`）と括弧の補足（`Lineage (term)`）を外す。`/` と `and` で並んだ語（`Activate/Activating`・`Died/Dies and Kills/Killed`）は別名として持つ。
   - `###`・行頭の太字の見出し（`Deleveling`）も用語にする。`Delevel` の定義はここにしか無い。番号付きの手順（`1.1 Announcing Activation`）と末尾が `:` の前置き（`Masteries:`）は外す。
   - 見出しでなく条文に名前がある用語も拾う。`Label Keywords` の箇条書き（`Deluge`・`Upkeep`）と、機能サブタイプのページで小見出しの役をする条文（`Siegeable`・`Gun / Bow / Aetherwing`）。
-  - 複数形・ハイフン・空白・`X Counters` の Counters を落としたキー（`src/shared/term-key.ts` の `termKey`）が同じ見出しは 1 語にまとめる。`Buff` と `Buff Counters`、`Token` と `Tokens`（ページ）は同じものの定義が別の場所にあり、分けると片方しか返らない。動詞の活用は原形に戻さない。`Load` と `Loaded`、`Negate` と `Negated`、`Link` と `Linked` は別の用語。
+  - 複数形・ハイフン・空白・`X Counters` の Counters を落としたキー（`src/shared/domain/term-key.ts` の `termKey`）が同じ見出しは 1 語にまとめる。`Buff` と `Buff Counters`、`Token` と `Tokens`（ページ）は同じものの定義が別の場所にあり、分けると片方しか返らない。動詞の活用は原形に戻さない。`Load` と `Loaded`、`Negate` と `Negated`、`Link` と `Linked` は別の用語。
 - **名前と定義の場所を分ける**: 同じ名前の定義が複数の場所にある。`Bulwark`（カウンターとキーワード能力）・`Durability`（ステータスとカウンター）・`Lineage`（用語とキーワード能力）は意味が違い、`Redirect`・`Last-Known Information` は詳しい説明と用語集の要約。本文の「Bulwark」がどちらの意味かは文字列の照合では決められないので、本文の語は名前（`term`）に結び、`get_term` は定義（`term_definition`）をすべて返して、文脈からモデルに選ばせる。定義を 1 つに絞ると、カウンターとしての意味などが消える。
 - **当たったものはすべて記録する**: 1 枚あたり中央値 7 語、上位 10% で 10 語当たり、大半は `Champion`（942 枚）・`Target`（773 枚）のような基本語。索引には事実をすべて持たせ、何を見せるか（当たるカードが少ない順に上位 N 語など）はツールの側で決める。除外リストやしきい値を索引に埋め込むと、使ってみて変えたいときに取り込みからやり直しになる。
 - **記録する単位**: ルール文書は条文単位で結ぶ（`clause_term`・`clause_card`）。ページ単位では「どの条文か」を後から復元できず、モデルが最大 3,000 トークンのページを丸ごと読むことになる。ページ単位が欲しいときは条文からたどる。
@@ -480,7 +504,7 @@ graph DB は使わない。参照は最大 2 ホップで閉路が無く、結�
   - `search_rules` の条文と `get_card` の条文・用語は、節の見出しが無いので `[ID](URL)` の形にする。URL が引けなければ `[ID]` のまま出す。
   - 太字の節と lead 節の URL は `#` なしのページ URL。サイト上にこれらの anchor が無く、作った anchor はページの先頭に飛ぶだけだから。
   - 条文の本文にあるページへのリンクは、DB には `[文言](pageId#節見出し)` のまま持ち、表示のときに `[文言](URL) [pageId#節見出し]` に書き換える（`rewriteRuleLinks`）。`search_rules` の本文は FTS5 の抜粋で、端がリンクの途中ならリンクが丸ごと入るまで抜粋を広げてから書き換える。
-- カードと裁定の URL は `https://index.gatcg.com/card/<slug>`（`cardUrl`、`src/shared/site-url.ts`）。
+- カードと裁定の URL は `https://index.gatcg.com/card/<slug>`（`cardUrl`、`src/shared/domain/site-url.ts`）。
   - 裁定の URL は、cite_id の `#ruling:` より前の slug から作る（`rulingUrl`）。裁定の行は `[cite_id](URL) 題 (日付): 本文`。裏面の slug で `get_card` を呼んでも、裁定は表のカードに付いているので表の slug の URL になる。
   - `get_card` のカード名の見出しは `## 名前 (slug) (URL)`、裏面の見出しは `### Back face: 名前 (slug) (URL)` と、それぞれ自分の slug の URL を付ける。
   - `search_cards`・`find_cards` のカードの行には URL を付けない。1 行が長くなるだけで、詳しく見るなら `get_card` を呼ぶから。
@@ -512,8 +536,8 @@ graph DB は使わない。参照は最大 2 ホップで閉路が無く、結�
 - 1 語だけ受け付ける。モデルは条文の見出しや検索結果から語を写すので、書き方の違いで外さないよう、3 段で探す。
   1. `termKey` が用語名か別名と同じ。見出しの表示どおり（`Ranged N`）、単数・複数、ハイフン・空白の違いが当たる。
   2. 無ければ、活用を原形に戻し、末尾の ` Phase` も落とした `looseKey` で比べる（`Imbued` → `Imbue`、`Recollection` → `Recollection Phase`）。
-  3. 無ければ、派生語の表（`src/shared/term-key.ts` の `TERM_SYNONYMS`。`destroy` → `Destruction`、`Owner` → `Control and Ownership`）。
-  - 単数化と原形への戻しは、英語の辞書を持つ `compromise` に任せる。語尾を規則で削ると、`Status` と `Statuses` が合わず、`States` と `Stats` が重なる。
+  3. 無ければ、派生語の表（`src/shared/domain/term-key.ts` の `TERM_SYNONYMS`。`destroy` → `Destruction`、`Owner` → `Control and Ownership`）。
+  - 単数化と原形への戻しは、英語の辞書を持つ `compromise` に任せる（`src/shared/infrastructure/nlp/compromise-inflector.ts`）。語尾を規則で削ると、`Status` と `Statuses` が合わず、`States` と `Stats` が重なる。
   - 2・3 の書き方は索引の別名に入れない。別名は本文との照合にも使うので、`Control`・`destroy` を入れるとほぼすべての条文とカードに用語が結ばれる。
   - `and` で並んだ題を語に分けては比べない。`Card` が `Card and Object Information` に当たってしまう。
   - `/` で並んだ入力（`Died/Dies and Kills/Killed`・`Gun / Bow / Aetherwing`）は、全体で当たらなければ各部分の当たりを合わせる。
