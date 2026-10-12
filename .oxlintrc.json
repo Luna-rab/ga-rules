@@ -8,7 +8,8 @@
   "rules": {
     "typescript/no-floating-promises": "error",
     "typescript/no-misused-promises": "error",
-    "typescript/await-thenable": "error"
+    "typescript/await-thenable": "error",
+    "unicorn/prefer-node-protocol": "error"
   },
   "env": {
     "builtin": true
@@ -21,70 +22,82 @@
       }
     },
     {
-      "files": ["src/*/domain/**"],
+      "files": ["src/shared/**"],
       "rules": {
         "no-restricted-imports": [
           "error",
           {
             "patterns": [
               {
-                "group": [
-                  "bun",
-                  "bun/*",
-                  "bun:*",
-                  "node:*",
-                  "node:*/*",
-                  "child_process",
-                  "child_process/*",
-                  "cluster",
-                  "cluster/*",
-                  "dgram",
-                  "dgram/*",
-                  "dns",
-                  "dns/*",
-                  "fs",
-                  "fs/*",
-                  "http",
-                  "http/*",
-                  "http2",
-                  "http2/*",
-                  "https",
-                  "https/*",
-                  "inspector",
-                  "inspector/*",
-                  "module",
-                  "module/*",
-                  "net",
-                  "net/*",
-                  "os",
-                  "os/*",
-                  "path",
-                  "path/*",
-                  "perf_hooks",
-                  "perf_hooks/*",
-                  "process",
-                  "process/*",
-                  "readline",
-                  "readline/*",
-                  "repl",
-                  "repl/*",
-                  "stream",
-                  "stream/*",
-                  "tls",
-                  "tls/*",
-                  "tty",
-                  "tty/*",
-                  "url",
-                  "url/*",
-                  "v8",
-                  "v8/*",
-                  "vm",
-                  "vm/*",
-                  "worker_threads",
-                  "worker_threads/*",
-                  "zlib",
-                  "zlib/*"
-                ],
+                "group": ["../**/build", "../**/build/**", "../**/server", "../**/server/**"],
+                "message": "shared/ は Docker の両方の段に入るので、build/ と server/ を import しない"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/build/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["../**/server", "../**/server/**"],
+                "message": "build/ と server/ は別の段に入るので、互いに import しない。共有するものは shared/ に置く"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/server/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["../**/build", "../**/build/**"],
+                "message": "build/ と server/ は別の段に入るので、互いに import しない。共有するものは shared/ に置く"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/*/domain/**", "src/*/application/**"],
+      "rules": {
+        "no-restricted-globals": [
+          "error",
+          {
+            "name": "Bun",
+            "message": "domain/ と application/ は入出力をしない。bun は infrastructure/ で使う"
+          },
+          {
+            "name": "process",
+            "message": "domain/ と application/ は環境変数や引数を読まない。組み立て役が読んで渡す"
+          },
+          {
+            "name": "fetch",
+            "message": "domain/ と application/ は通信しない。infrastructure/ で使う"
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/shared/domain/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["bun", "bun/*", "bun:*", "node:*", "node:*/*"],
                 "message": "domain/ は入出力をしない。bun・Node の組み込みは infrastructure/ で使う"
               },
               {
@@ -113,6 +126,10 @@
                   "**/presentation/**"
                 ],
                 "message": "domain/ はほかの層を import しない。依存は外側の層から domain/ への一方向"
+              },
+              {
+                "group": ["../**/build", "../**/build/**", "../**/server", "../**/server/**"],
+                "message": "shared/ は Docker の両方の段に入るので、build/ と server/ を import しない"
               }
             ]
           }
@@ -120,7 +137,101 @@
       }
     },
     {
-      "files": ["src/*/application/**"],
+      "files": ["src/build/domain/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["bun", "bun/*", "bun:*", "node:*", "node:*/*"],
+                "message": "domain/ は入出力をしない。bun・Node の組み込みは infrastructure/ で使う"
+              },
+              {
+                "group": [
+                  "drizzle-orm",
+                  "drizzle-orm/*",
+                  "drizzle-kit",
+                  "drizzle-kit/*",
+                  "zod",
+                  "zod/*",
+                  "hono",
+                  "hono/*",
+                  "@modelcontextprotocol/**",
+                  "compromise",
+                  "compromise/*"
+                ],
+                "message": "domain/ はライブラリに縛られない。ライブラリは infrastructure/ か presentation/ で使い、domain/ には型と関数だけを置く"
+              },
+              {
+                "group": [
+                  "**/application",
+                  "**/application/**",
+                  "**/infrastructure",
+                  "**/infrastructure/**",
+                  "**/presentation",
+                  "**/presentation/**"
+                ],
+                "message": "domain/ はほかの層を import しない。依存は外側の層から domain/ への一方向"
+              },
+              {
+                "group": ["../**/server", "../**/server/**"],
+                "message": "build/ と server/ は別の段に入るので、互いに import しない。共有するものは shared/ に置く"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/server/domain/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["bun", "bun/*", "bun:*", "node:*", "node:*/*"],
+                "message": "domain/ は入出力をしない。bun・Node の組み込みは infrastructure/ で使う"
+              },
+              {
+                "group": [
+                  "drizzle-orm",
+                  "drizzle-orm/*",
+                  "drizzle-kit",
+                  "drizzle-kit/*",
+                  "zod",
+                  "zod/*",
+                  "hono",
+                  "hono/*",
+                  "@modelcontextprotocol/**",
+                  "compromise",
+                  "compromise/*"
+                ],
+                "message": "domain/ はライブラリに縛られない。ライブラリは infrastructure/ か presentation/ で使い、domain/ には型と関数だけを置く"
+              },
+              {
+                "group": [
+                  "**/application",
+                  "**/application/**",
+                  "**/infrastructure",
+                  "**/infrastructure/**",
+                  "**/presentation",
+                  "**/presentation/**"
+                ],
+                "message": "domain/ はほかの層を import しない。依存は外側の層から domain/ への一方向"
+              },
+              {
+                "group": ["../**/build", "../**/build/**"],
+                "message": "build/ と server/ は別の段に入るので、互いに import しない。共有するものは shared/ に置く"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/build/application/**"],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -154,6 +265,10 @@
                   "**/presentation/**"
                 ],
                 "message": "application/ は外側の層を import しない。実装は組み立て役（build/index.ts・server/index.ts）が渡す"
+              },
+              {
+                "group": ["../**/server", "../**/server/**"],
+                "message": "build/ と server/ は別の段に入るので、互いに import しない。共有するものは shared/ に置く"
               }
             ]
           }
@@ -161,7 +276,52 @@
       }
     },
     {
-      "files": ["src/*/presentation/**"],
+      "files": ["src/server/application/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["bun", "bun/*", "bun:*", "node:*", "node:*/*"],
+                "message": "application/ は入出力をしない。入出力は ports.ts の型を通し、実装は infrastructure/ に置く"
+              },
+              {
+                "group": [
+                  "drizzle-orm",
+                  "drizzle-orm/*",
+                  "drizzle-kit",
+                  "drizzle-kit/*",
+                  "zod",
+                  "zod/*",
+                  "hono",
+                  "hono/*",
+                  "@modelcontextprotocol/**",
+                  "compromise",
+                  "compromise/*"
+                ],
+                "message": "application/ はライブラリに縛られない。ライブラリは infrastructure/ か presentation/ で使う"
+              },
+              {
+                "group": [
+                  "**/infrastructure",
+                  "**/infrastructure/**",
+                  "**/presentation",
+                  "**/presentation/**"
+                ],
+                "message": "application/ は外側の層を import しない。実装は組み立て役（build/index.ts・server/index.ts）が渡す"
+              },
+              {
+                "group": ["../**/build", "../**/build/**"],
+                "message": "build/ と server/ は別の段に入るので、互いに import しない。共有するものは shared/ に置く"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/server/presentation/**"],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -178,6 +338,10 @@
                   "**/infrastructure/**"
                 ],
                 "message": "presentation/ は DB や実装を直接使わない。application/ のユースケースとポートを通す。実装は組み立て役（server/index.ts）が渡す"
+              },
+              {
+                "group": ["../**/build", "../**/build/**"],
+                "message": "build/ と server/ は別の段に入るので、互いに import しない。共有するものは shared/ に置く"
               }
             ]
           }
@@ -185,7 +349,23 @@
       }
     },
     {
-      "files": ["src/*/infrastructure/**"],
+      "files": ["src/shared/infrastructure/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["../**/build", "../**/build/**", "../**/server", "../**/server/**"],
+                "message": "shared/ は Docker の両方の段に入るので、build/ と server/ を import しない"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/build/infrastructure/**"],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -194,6 +374,30 @@
               {
                 "group": ["**/presentation", "**/presentation/**"],
                 "message": "infrastructure/ は presentation/ を import しない。共有する型は domain/ か application/ に置く"
+              },
+              {
+                "group": ["../**/server", "../**/server/**"],
+                "message": "build/ と server/ は別の段に入るので、互いに import しない。共有するものは shared/ に置く"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/server/infrastructure/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/presentation", "**/presentation/**"],
+                "message": "infrastructure/ は presentation/ を import しない。共有する型は domain/ か application/ に置く"
+              },
+              {
+                "group": ["../**/build", "../**/build/**"],
+                "message": "build/ と server/ は別の段に入るので、互いに import しない。共有するものは shared/ に置く"
               }
             ]
           }
@@ -203,7 +407,8 @@
     {
       "files": ["src/**/__tests__/**"],
       "rules": {
-        "no-restricted-imports": "off"
+        "no-restricted-imports": "off",
+        "no-restricted-globals": "off"
       }
     },
     {
