@@ -1,10 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import type { ToolContext } from "../../../../infrastructure/sqlite/open";
 import { openTestContext } from "../../../../__tests__/helpers/open-test-context";
 import { searchCards } from "../search-cards";
 
-const ctx: ToolContext = openTestContext();
+const ctx = openTestContext();
 type Args = Parameters<typeof searchCards.handler>[1];
 const run = (args: Args) => searchCards.handler(ctx, args);
 

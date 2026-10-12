@@ -1,5 +1,5 @@
-import { renderSections, type SectionNode } from "./clauses";
-import type { RuleUrls } from "./rule-links";
+import type { RuleUrls, SectionNode } from "../../domain/model";
+import { renderSections } from "./clauses";
 
 // general は、どの用語の定義でもない節。一覧の前に条文を載せる
 export function renderGlossary(

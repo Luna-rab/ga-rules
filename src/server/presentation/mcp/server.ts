@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ToolContext } from "../../infrastructure/sqlite/open";
+import type { ToolContext } from "../../application/context";
 import { logToolCall } from "../../infrastructure/logging/console-logger";
 import { SERVER_INSTRUCTIONS } from "../markdown/overview-text";
 import { TOOLS } from "./tools";

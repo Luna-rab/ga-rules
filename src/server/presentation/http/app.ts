@@ -1,6 +1,6 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { Hono } from "hono";
-import type { ToolContext } from "../../infrastructure/sqlite/open";
+import type { ToolContext } from "../../application/context";
 import { createMcpServer } from "../mcp/server";
 import { rateLimit, type RateLimitOptions } from "./rate-limit";
 

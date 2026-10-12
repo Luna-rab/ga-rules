@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import type { ToolContext } from "../../../../infrastructure/sqlite/open";
 import { rewriteRuleLinks } from "../../../markdown/rule-links";
 import { openTestContext } from "../../../../__tests__/helpers/open-test-context";
 import { unrewrittenLinks } from "../../../../__tests__/helpers/links";
@@ -8,7 +7,7 @@ import { getTerm } from "../get-term";
 
 const ClauseRow = z.object({ clause_id: z.string(), text: z.string() });
 
-const ctx: ToolContext = openTestContext();
+const ctx = openTestContext();
 const call = (term: string) => getTerm.handler(ctx, { term });
 
 // 期待値は索引から引く。ツールの出力を組み立てる側の関数は使わない。

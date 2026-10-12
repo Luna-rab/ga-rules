@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { ToolContext } from "../../../infrastructure/sqlite/open";
+import type { ToolContext } from "../../../application/context";
 
 export type ToolOutput = { text: string; isError?: boolean; count: number };
 

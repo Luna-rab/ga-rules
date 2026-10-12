@@ -5,7 +5,6 @@ import {
   GLOSSARY_PAGE_IDS,
   glossaryTermNames,
 } from "../../../domain/glossary";
-import { readPage } from "../../../infrastructure/sqlite/pages";
 import { renderSections } from "../../markdown/clauses";
 import { renderGlossary } from "../../markdown/glossary";
 import type { ToolDefinition } from "./types";
@@ -35,7 +34,7 @@ export const getTerm: ToolDefinition<{ term: z.ZodString }> = {
 
     const blocks: string[] = [];
     for (const def of found.definitions) {
-      const page = readPage(ctx.db, def.pageId);
+      const page = ctx.rules.readPage(def.pageId);
       if (!page) continue;
       if (def.sectionId === null && GLOSSARY_PAGE_IDS.includes(def.pageId)) {
         blocks.push(

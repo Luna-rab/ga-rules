@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { type CardDetail, renderCardDetail } from "../cards";
+import type { CardDetail } from "../../../domain/model";
+import { renderCardDetail } from "../cards";
 
 const card: CardDetail = {
   slug: "test-card",

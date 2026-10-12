@@ -15,10 +15,18 @@ import {
   term,
   termDefinition,
 } from "../../../shared/infrastructure/sqlite/schema";
-import type { CardQuery } from "../../domain/card-query";
-import type { CardDetail, CardSummary } from "../../presentation/markdown/cards";
+import type { CardRepository } from "../../application/ports";
+import { type CardQuery, SEARCH_LIMIT } from "../../domain/card-query";
+import type { CardDetail, CardHit, CardSummary } from "../../domain/model";
+import { allWords } from "./fts-query";
 
-export const SEARCH_LIMIT = 20;
+export function createSqliteCardRepository(db: Database): CardRepository {
+  return {
+    readSummaries: (slugs) => readCardSummaries(db, slugs),
+    search: (q) => searchCardRows(db, q),
+    readDetail: (slug) => readCardDetail(db, slug),
+  };
+}
 
 const StringArray = z.array(z.string());
 const Cost = z.object({
@@ -50,7 +58,7 @@ function toSummary(r: CardRow): CardSummary {
 }
 
 // 指定した順に並べて返す。slug が索引に無ければ飛ばす。
-export function readCardSummaries(db: Database, slugs: string[]): CardSummary[] {
+function readCardSummaries(db: Database, slugs: string[]): CardSummary[] {
   if (slugs.length === 0) return [];
   const rows = drizzle(db)
     .select()
@@ -106,8 +114,6 @@ function conditions(q: CardQuery): SQL[] {
   return where;
 }
 
-export type CardHit = { card: CardSummary; snippet: string | null };
-
 // 抜粋は効果テキストの列（card_fts の 2 列目）から取る。名前の列に当たっただけのカードの行は、
 // 効果の冒頭を出す（抜粋は null）。
 const EFFECT_COLUMN = 1;
@@ -115,11 +121,11 @@ const HIGHLIGHT = "**";
 
 // 条件をすべて満たすカードの総件数と、先頭 SEARCH_LIMIT 件。
 // 全文検索があれば関連度順、無ければ名前順。
-export function searchCardRows(db: Database, q: CardQuery): { total: number; hits: CardHit[] } {
+function searchCardRows(db: Database, q: CardQuery): { total: number; hits: CardHit[] } {
   const d = drizzle(db);
   const where = conditions(q);
 
-  if (q.match === null) {
+  if (q.words === null) {
     const total = d
       .select({ n: count() })
       .from(card)
@@ -138,7 +144,8 @@ export function searchCardRows(db: Database, q: CardQuery): { total: number; hit
     };
   }
 
-  const matched = sql`card.rowid IN (SELECT rowid FROM card_fts WHERE card_fts MATCH ${q.match})`;
+  const match = allWords(q.words);
+  const matched = sql`card.rowid IN (SELECT rowid FROM card_fts WHERE card_fts MATCH ${match})`;
   const total = d
     .select({ n: count() })
     .from(card)
@@ -150,7 +157,7 @@ export function searchCardRows(db: Database, q: CardQuery): { total: number; hit
       sql`SELECT ${card.slug} AS slug,
             snippet(card_fts, ${EFFECT_COLUMN}, ${HIGHLIGHT}, ${HIGHLIGHT}, '…', 12) AS snippet
           FROM card_fts JOIN ${card} ON card.rowid = card_fts.rowid
-          WHERE card_fts MATCH ${q.match} AND ${and(...where) ?? sql`1`}
+          WHERE card_fts MATCH ${match} AND ${and(...where) ?? sql`1`}
           ORDER BY bm25(card_fts), ${card.name}, ${card.slug}
           LIMIT ${SEARCH_LIMIT}`,
     )
@@ -180,7 +187,7 @@ const toRuling = (r: typeof cardRuling.$inferSelect) => ({
 
 // 保存した列・裁定全件・用語・参照先・カード名が出る条文と他カードの裁定を読む。
 // 裁定と参照先は表のカードに付いているので、裏面でも表の slug で引く。
-export function readCardDetail(db: Database, slug: string): CardDetail | null {
+function readCardDetail(db: Database, slug: string): CardDetail | null {
   const d = drizzle(db);
   const row = d.select().from(card).where(eq(card.slug, slug)).get();
   if (!row) return null;

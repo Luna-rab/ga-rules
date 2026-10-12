@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { rewriteRuleLinks, type RuleUrls } from "../rule-links";
+import type { RuleUrls } from "../../../domain/model";
+import { rewriteRuleLinks } from "../rule-links";
 
 const SITE = "https://rules.gatcg.com";
 const RESOLUTION = `${SITE}/game-mechanics/game-mechanics-playing-cards/playing-cards-resolution`;

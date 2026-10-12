@@ -1,9 +1,57 @@
 import type { Database } from "bun:sqlite";
-import { sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { z } from "zod";
-import { linkSpans } from "../../presentation/markdown/rule-links";
-import type { ClauseHit, RulingHit } from "../../presentation/markdown/search-rules";
+import { ruleClause, rulePage, ruleSection } from "../../../shared/infrastructure/sqlite/schema";
+import type { RuleRepository } from "../../application/ports";
+import type { ClauseHit, PageNode, RulingHit } from "../../domain/model";
+import { linkSpans } from "../../domain/rule-link";
+import { anyWord } from "./fts-query";
+
+export function createSqliteRuleRepository(db: Database): RuleRepository {
+  return {
+    readPage: (pageId) => readPage(db, pageId),
+    searchClauses: (words, limit) => searchClauses(db, anyWord(words), limit),
+    searchRulings: (words, limit) => searchRulings(db, anyWord(words), limit),
+  };
+}
+
+function readPage(db: Database, pageId: string): PageNode | null {
+  const d = drizzle(db);
+  const page = d.select().from(rulePage).where(eq(rulePage.pageId, pageId)).get();
+  if (!page) return null;
+
+  const sections = d
+    .select()
+    .from(ruleSection)
+    .where(eq(ruleSection.pageId, pageId))
+    .orderBy(asc(ruleSection.position))
+    .all();
+  const clauses = d
+    .select({
+      sectionId: ruleClause.sectionId,
+      clauseId: ruleClause.clauseId,
+      text: ruleClause.text,
+    })
+    .from(ruleClause)
+    .innerJoin(ruleSection, eq(ruleClause.sectionId, ruleSection.sectionId))
+    .where(eq(ruleSection.pageId, pageId))
+    .orderBy(asc(ruleSection.position), asc(ruleClause.position))
+    .all();
+
+  return {
+    pageId,
+    title: page.title,
+    sections: sections.map((s) => ({
+      sectionId: s.sectionId,
+      heading: s.heading,
+      url: s.url,
+      clauses: clauses
+        .filter((c) => c.sectionId === s.sectionId)
+        .map((c) => ({ clauseId: c.clauseId, text: c.text })),
+    })),
+  };
+}
 
 const ClauseRow = z.object({
   clauseId: z.string(),
@@ -49,7 +97,7 @@ function withWholeLinks(excerpt: string, full: string): string {
   return `${start > 0 ? ELLIPSIS : ""}${full.slice(start, end)}${end < full.length ? ELLIPSIS : ""}`;
 }
 
-export function searchClauses(db: Database, match: string, limit: number): ClauseHit[] {
+function searchClauses(db: Database, match: string, limit: number): ClauseHit[] {
   return drizzle(db)
     .all(
       sql`SELECT c.clause_id AS clauseId, c.text AS full, p.title AS pageTitle, s.url AS url,
@@ -67,7 +115,7 @@ export function searchClauses(db: Database, match: string, limit: number): Claus
 }
 
 // 同じ文面の裁定は、関連度が最も高い 1 件にまとめ、付いているカードの枚数と 3 枚までの名前を添える
-export function searchRulings(db: Database, match: string, limit: number): RulingHit[] {
+function searchRulings(db: Database, match: string, limit: number): RulingHit[] {
   const d = drizzle(db);
   const rows = d
     .all(

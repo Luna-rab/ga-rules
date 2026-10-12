@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { readCardDetail } from "../../../infrastructure/sqlite/cards";
 import { renderCardDetail } from "../../markdown/cards";
 import type { ToolDefinition } from "./types";
 
@@ -19,7 +18,7 @@ export const getCard: ToolDefinition<{ slugs: z.ZodArray<z.ZodString> }> = {
       };
     }
     const unique = [...new Set(slugs)];
-    const cards = unique.map((s) => readCardDetail(ctx.db, s));
+    const cards = unique.map((s) => ctx.cards.readDetail(s));
     const missing = unique.filter((_, i) => cards[i] === null);
     if (missing.length > 0) {
       return {

@@ -1,11 +1,24 @@
 import { Database } from "bun:sqlite";
-import type { TermKeys } from "../../../shared/domain/term-key";
 import { termKeys } from "../../../shared/infrastructure/nlp/compromise-inflector";
-import { type Catalog, loadCatalog } from "./catalog-loader";
+import type { ToolContext } from "../../application/context";
+import { createSqliteCardRepository } from "./card-repository";
+import { loadCatalog } from "./catalog-loader";
+import { createSqliteRuleRepository } from "./rule-repository";
 
-export type ToolContext = { db: Database; catalog: Catalog; termKeys: TermKeys };
+export function openIndexDatabase(indexPath: string): Database {
+  return new Database(indexPath, { readonly: true, strict: true });
+}
+
+export function createToolContext(db: Database): ToolContext {
+  const rules = createSqliteRuleRepository(db);
+  return {
+    rules,
+    cards: createSqliteCardRepository(db),
+    catalog: loadCatalog(db, rules),
+    termKeys,
+  };
+}
 
 export function openContext(indexPath: string): ToolContext {
-  const db = new Database(indexPath, { readonly: true, strict: true });
-  return { db, catalog: loadCatalog(db), termKeys };
+  return createToolContext(openIndexDatabase(indexPath));
 }

@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { findSimilarCards, nameWords } from "../../../domain/card-name";
-import { readCardSummaries } from "../../../infrastructure/sqlite/cards";
 import { renderCardLine } from "../../markdown/cards";
 import type { ToolDefinition } from "./types";
 
@@ -28,10 +27,7 @@ export const findCards: ToolDefinition<{ name: z.ZodString }> = {
       };
     }
     const found = findSimilarCards(name, ctx.catalog.cards);
-    const cards = readCardSummaries(
-      ctx.db,
-      found.cards.map((c) => c.slug),
-    );
+    const cards = ctx.cards.readSummaries(found.cards.map((c) => c.slug));
     if (cards.length === 0) return { text: "No cards found.", count: 0 };
     const lines = cards.map((c) => renderCardLine(c));
     if (found.total > cards.length) {

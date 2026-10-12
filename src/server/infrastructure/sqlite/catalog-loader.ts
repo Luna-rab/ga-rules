@@ -11,41 +11,8 @@ import {
   termAlias,
   termDefinition,
 } from "../../../shared/infrastructure/sqlite/schema";
-import type { RuleUrls } from "../../presentation/markdown/rule-links";
-import { type PageNode, readPage } from "./pages";
-
-export type TocEntry = {
-  pageId: string;
-  title: string;
-  parentPageId: string | null;
-  depth: number;
-};
-export type TermEntry = {
-  name: string;
-  aliases: string[];
-  // sectionId が null なら、ページ全体が定義
-  definitions: { pageId: string; sectionId: string | null }[];
-};
-export type CardEntry = { slug: string; name: string };
-export type Attributes = {
-  types: string[];
-  subtypes: string[];
-  classes: string[];
-  elements: string[];
-};
-
-// 起動時に 1 回だけ読む、変わらないデータ。
-export type Catalog = {
-  // rule_page.position の順（親が子より先）
-  toc: TocEntry[];
-  // OVERVIEW_PAGE_IDS の順
-  overview: PageNode[];
-  terms: TermEntry[];
-  cards: CardEntry[];
-  attributes: Attributes;
-  // page_id・section_id → 公式サイトの URL
-  ruleUrls: RuleUrls;
-};
+import type { RuleRepository } from "../../application/ports";
+import type { Catalog, TermEntry } from "../../domain/model";
 
 const StringArray = z.array(z.string());
 
@@ -53,7 +20,7 @@ function distinctSorted(values: Set<string>): string[] {
   return [...values].toSorted();
 }
 
-export function loadCatalog(db: Database): Catalog {
+export function loadCatalog(db: Database, rules: RuleRepository): Catalog {
   const d = drizzle(db);
 
   const pages = d.select().from(rulePage).orderBy(asc(rulePage.position)).all();
@@ -74,7 +41,7 @@ export function loadCatalog(db: Database): Catalog {
   }
 
   const overview = OVERVIEW_PAGE_IDS.map((id) => {
-    const page = readPage(db, id);
+    const page = rules.readPage(id);
     if (!page) throw new Error(`概要のページが索引に無い: ${id}`);
     return page;
   });

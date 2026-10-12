@@ -1,9 +1,7 @@
 import { HINT_EXAMPLE, HINT_EXCEPTION } from "../../../shared/domain/hint";
-import { citeLink, rewriteRuleLinks, type RuleUrls } from "./rule-links";
-import { renderRuling, type RulingNode } from "./rulings";
-
-export type ClauseHit = { clauseId: string; pageTitle: string; url: string; text: string };
-export type RulingHit = { ruling: RulingNode; cardCount: number; cardNames: string[] };
+import type { ClauseHit, RuleUrls, RulingHit } from "../../domain/model";
+import { citeLink, rewriteRuleLinks } from "./rule-links";
+import { renderRuling } from "./rulings";
 
 function oneLine(s: string): string {
   return s.replace(/\s+/g, " ").trim();
@@ -19,7 +17,7 @@ function clauseOneLine(text: string): string {
   return oneLine(lines.length > 0 ? lines.join("\n") : text);
 }
 
-// 抜粋は infrastructure/sqlite/search.ts が端のリンクを丸ごと入れるので、ここは全文に抜粋が見つからなかったときの保険。
+// 抜粋は infrastructure/sqlite/rule-repository.ts が端のリンクを丸ごと入れるので、ここは全文に抜粋が見つからなかったときの保険。
 // 切れたリンクの残り（書き換えられない `](target)` と、閉じない `[`）を、文言だけにする。
 // 末尾が `...` の抜粋の閉じない `[` は、条文が引用するカード名の `[Flawless` なので外さない。
 function dropCutLinks(excerpt: string): string {

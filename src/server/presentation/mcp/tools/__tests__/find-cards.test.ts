@@ -1,12 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import type { ToolContext } from "../../../../infrastructure/sqlite/open";
 import { openTestContext } from "../../../../__tests__/helpers/open-test-context";
 import { findCards } from "../find-cards";
 
 const SlugRow = z.object({ slug: z.string() });
 
-const ctx: ToolContext = openTestContext();
+const ctx = openTestContext();
 const run = (name: string) => findCards.handler(ctx, { name });
 const linesOf = (text: string) => text.split("\n").filter((l) => l.trim() !== "");
 const hasSlug = (line: string, slug: string) =>

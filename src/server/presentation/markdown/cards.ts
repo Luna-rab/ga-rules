@@ -1,40 +1,7 @@
 import { cardUrl } from "../../../shared/domain/site-url";
-import type { ClauseNode } from "./clauses";
-import { citeLink, rewriteRuleLinks, type RuleUrls } from "./rule-links";
-import { type RulingNode, renderRuling } from "./rulings";
-
-export type CardCost = { type: string | null; value: string | null };
-
-export type CardSummary = {
-  slug: string;
-  name: string;
-  types: string[];
-  subtypes: string[];
-  classes: string[];
-  elements: string[];
-  cost: CardCost;
-  level: number | null;
-  power: number | null;
-  life: number | null;
-  durability: number | null;
-  speed: boolean | null;
-  effectRaw: string | null;
-  frontSlug: string | null;
-};
-
-export type CardDetail = CardSummary & {
-  // formats 名 → limit（0 なら禁止）
-  legality: Record<string, number | null> | null;
-  backFace: CardSummary | null;
-  frontFace: { slug: string; name: string } | null;
-  // 裏面でも表のカードの裁定
-  rulings: RulingNode[];
-  // definitionIds は用語の定義の引用 ID（節 ID、ページ全体ならページ ID）
-  terms: { name: string; definitionIds: string[] }[];
-  references: { slug: string; name: string; kind: string }[];
-  clauses: (ClauseNode & { url: string })[];
-  otherRulings: RulingNode[];
-};
+import type { CardCost, CardDetail, CardSummary, RuleUrls } from "../../domain/model";
+import { citeLink, rewriteRuleLinks } from "./rule-links";
+import { renderRuling } from "./rulings";
 
 const oneLine = (s: string) => s.replace(/\s+/g, " ").trim();
 

@@ -1,12 +1,5 @@
-import { rewriteRuleLinks, type RuleUrls } from "./rule-links";
-
-export type ClauseNode = { clauseId: string; text: string };
-export type SectionNode = {
-  sectionId: string;
-  heading: string;
-  url: string;
-  clauses: ClauseNode[];
-};
+import type { ClauseNode, RuleUrls, SectionNode } from "../../domain/model";
+import { rewriteRuleLinks } from "./rule-links";
 
 // 条文の行頭に [clause_id] を付ける。ID の組み立てをモデルに任せない。
 export function renderClause(c: ClauseNode, urls: RuleUrls): string {

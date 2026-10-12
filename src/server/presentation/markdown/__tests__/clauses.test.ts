@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { renderSections } from "../clauses";
-import type { RuleUrls } from "../rule-links";
+import type { RuleUrls } from "../../../domain/model";
 
 const urls: RuleUrls = new Map([
   ["game-mechanics-damage", "https://rules.gatcg.com/game-mechanics/game-mechanics-damage"],

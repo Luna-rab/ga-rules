@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import type { ToolContext } from "../../../../infrastructure/sqlite/open";
 import { openTestContext } from "../../../../__tests__/helpers/open-test-context";
 import { unrewrittenLinks } from "../../../../__tests__/helpers/links";
 import { searchRules } from "../search-rules";
@@ -9,7 +8,7 @@ const NameRow = z.object({ name: z.string() });
 const TitleRow = z.object({ title: z.string() });
 const CountRow = z.object({ n: z.number() });
 
-const ctx: ToolContext = openTestContext();
+const ctx = openTestContext();
 const call = (query: string) => searchRules.handler(ctx, { query });
 
 const OMEN = "Cards in banishment with omen counters on them are omens.";

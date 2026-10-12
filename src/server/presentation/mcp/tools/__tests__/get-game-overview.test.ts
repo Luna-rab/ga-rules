@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { OVERVIEW_PAGE_IDS } from "../../../../../shared/domain/overview";
-import type { ToolContext } from "../../../../infrastructure/sqlite/open";
 import { findTerms } from "../../../../domain/glossary";
 import { ELEMENTS } from "../../../markdown/overview-text";
 import { rewriteRuleLinks } from "../../../markdown/rule-links";
@@ -16,7 +15,7 @@ const PageRow = z.object({
 });
 const ClauseRow = z.object({ clause_id: z.string(), text: z.string() });
 
-const ctx: ToolContext = openTestContext();
+const ctx = openTestContext();
 const out = getGameOverview.handler(ctx, {});
 
 // 期待値は索引から引く。ツールの出力を組み立てる側の関数は使わない。

@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { parseCardQuery } from "../../../domain/card-query";
-import { SEARCH_LIMIT, searchCardRows } from "../../../infrastructure/sqlite/cards";
+import { parseCardQuery, SEARCH_LIMIT } from "../../../domain/card-query";
 import { renderCardLine } from "../../markdown/cards";
 import type { ToolDefinition } from "./types";
 
@@ -35,7 +34,7 @@ export const searchCards: ToolDefinition<typeof inputSchema> = {
     const parsed = parseCardQuery(args, ctx.catalog.attributes);
     if (!parsed.ok) return { text: parsed.message, isError: true, count: 0 };
 
-    const { total, hits } = searchCardRows(ctx.db, parsed.query);
+    const { total, hits } = ctx.cards.search(parsed.query);
     if (hits.length === 0) return { text: "No cards found.", count: 0 };
     const header =
       total > SEARCH_LIMIT

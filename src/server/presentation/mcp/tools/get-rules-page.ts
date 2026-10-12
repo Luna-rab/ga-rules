@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { pageIdOfCiteId } from "../../../../shared/domain/cite";
 import { generalSections, GLOSSARY_PAGE_IDS, glossaryTermNames } from "../../../domain/glossary";
-import { readPage } from "../../../infrastructure/sqlite/pages";
 import { renderSections } from "../../markdown/clauses";
 import { renderGlossary } from "../../markdown/glossary";
 import type { ToolDefinition } from "./types";
@@ -26,14 +25,14 @@ export const getRulesPage: ToolDefinition<{ page_id: z.ZodString }> = {
       const general = generalSections(
         ctx.catalog.terms,
         pageId,
-        readPage(ctx.db, pageId)?.sections ?? [],
+        ctx.rules.readPage(pageId)?.sections ?? [],
       );
       return {
         text: renderGlossary(entry.title, pageId, names, general, ctx.catalog.ruleUrls),
         count: 1,
       };
     }
-    const page = readPage(ctx.db, pageId);
+    const page = ctx.rules.readPage(pageId);
     if (!page)
       return { text: `Rules page "${pageId}" is missing from the index.`, isError: true, count: 0 };
     return {

@@ -4,13 +4,13 @@ import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import { openContext, type ToolContext } from "../../../../infrastructure/sqlite/open";
+import { openContext } from "../../../../infrastructure/sqlite/open";
 import { rewriteRuleLinks } from "../../../markdown/rule-links";
 import { openTestContext } from "../../../../__tests__/helpers/open-test-context";
 import { unrewrittenLinks } from "../../../../__tests__/helpers/links";
 import { getCard } from "../get-card";
 
-const ctx: ToolContext = openTestContext();
+const ctx = openTestContext();
 const run = (slugs: string[]) => getCard.handler(ctx, { slugs });
 const list = (json: string) => z.array(z.string()).parse(JSON.parse(json)).join(", ");
 

@@ -1,13 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import type { ToolContext } from "../../../../infrastructure/sqlite/open";
 import { openTestContext } from "../../../../__tests__/helpers/open-test-context";
 import { getRulesPage } from "../get-rules-page";
 import { unrewrittenLinks } from "../../../../__tests__/helpers/links";
 
 const ClauseRow = z.object({ clause_id: z.string(), text: z.string() });
 
-const ctx: ToolContext = openTestContext();
+const ctx = openTestContext();
 const call = (page_id: string) => getRulesPage.handler(ctx, { page_id });
 
 // 期待値は索引から引く。ツールの出力を組み立てる側の関数は使わない。

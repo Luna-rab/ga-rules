@@ -1,9 +1,7 @@
-export type CardAttributes = {
-  types: string[];
-  subtypes: string[];
-  classes: string[];
-  elements: string[];
-};
+import type { Attributes } from "./model";
+
+// search_cards が返す最大の件数。総件数がこれを超えたら、条件を足すよう促す
+export const SEARCH_LIMIT = 20;
 
 export type SearchCardsArgs = {
   text?: string;
@@ -37,8 +35,8 @@ export type AttributeKey = "type" | "subtype" | "class" | "element";
 
 // 照合の済んだ検索条件。値は DB にある綴りに直してある。
 export type CardQuery = {
-  // FTS5 の MATCH にそのまま渡せる式（語を引用符で囲み、AND でつなぐ）
-  match: string | null;
+  // 名前か効果テキストに全語を含むカードが当たる
+  words: string[] | null;
   attributes: { key: AttributeKey; value: string }[];
   costType: string | null;
   speed: boolean | null;
@@ -49,7 +47,7 @@ export type CardQuery = {
 
 export type ParsedCardQuery = { ok: true; query: CardQuery } | { ok: false; message: string };
 
-const ATTRIBUTE_LISTS: [AttributeKey, keyof CardAttributes][] = [
+const ATTRIBUTE_LISTS: [AttributeKey, keyof Attributes][] = [
   ["type", "types"],
   ["subtype", "subtypes"],
   ["class", "classes"],
@@ -61,14 +59,13 @@ function pick(values: string[], given: string): string | null {
   return values.find((v) => v.toLowerCase() === lower) ?? null;
 }
 
-// 語を英数字に分け、全語を含む FTS5 の式にする。記号を式に渡さない。
-export function toMatchExpression(text: string): string | null {
-  const words = text.match(/[\p{L}\p{N}]+/gu);
-  return words ? words.map((w) => `"${w}"`).join(" ") : null;
+// 文字と数字の語に分ける。記号は検索の式に渡さない。語が無ければ null
+function textWords(text: string): string[] | null {
+  return text.match(/[\p{L}\p{N}]+/gu);
 }
 
 // search_cards の引数を確かめる。呼び方の誤りは直し方つきの message で返す。
-export function parseCardQuery(args: SearchCardsArgs, attrs: CardAttributes): ParsedCardQuery {
+export function parseCardQuery(args: SearchCardsArgs, attrs: Attributes): ParsedCardQuery {
   if (Object.values(args).every((v) => v === undefined)) {
     return {
       ok: false,
@@ -81,10 +78,10 @@ export function parseCardQuery(args: SearchCardsArgs, attrs: CardAttributes): Pa
   const invalid = (name: string, values: string[]) =>
     errors.push(`Invalid ${name}. Valid values: ${values.join(", ")}`);
 
-  let match: string | null = null;
+  let words: string[] | null = null;
   if (args.text !== undefined) {
-    match = toMatchExpression(args.text);
-    if (match === null) {
+    words = textWords(args.text);
+    if (words === null) {
       errors.push("text has no letters or digits to search for. Give at least one word.");
     }
   }
@@ -133,6 +130,6 @@ export function parseCardQuery(args: SearchCardsArgs, attrs: CardAttributes): Pa
   if (errors.length > 0) return { ok: false, message: errors.join("\n") };
   return {
     ok: true,
-    query: { match, attributes, costType, speed, legalIn, bannedIn, ranges },
+    query: { words, attributes, costType, speed, legalIn, bannedIn, ranges },
   };
 }
