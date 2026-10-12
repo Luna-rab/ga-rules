@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Card } from "../../../domain/model";
 import type { Relations } from "../../../domain/relate";
-import { type IndexData, writeIndex } from "../index-writer";
+import type { IndexData } from "../../../application/ports";
+import { writeIndex } from "../index-writer";
 
 let dir: string;
 let outPath: string;

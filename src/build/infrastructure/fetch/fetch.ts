@@ -106,16 +106,25 @@ async function fetchCards(): Promise<number> {
   return cards.length;
 }
 
-// 前回の取得で残ったファイルが混ざらないよう、毎回空にしてから取る。
-rmSync(DATA_DIR, { recursive: true, force: true });
-mkdirSync(DATA_DIR, { recursive: true });
-
-const [rulesCommit, cardCount] = await Promise.all([fetchRules(), fetchCards()]);
-
-const source = {
-  rules: { repo: RULES_REPO, commit: rulesCommit },
-  cards: { count: cardCount },
-  fetchedAt: new Date().toISOString(),
+export type FetchedSource = {
+  rules: { repo: string; commit: string };
+  cards: { count: number };
+  fetchedAt: string;
 };
-await Bun.write(SOURCE_FILE, `${JSON.stringify(source, null, 2)}\n`);
-console.log(JSON.stringify(source));
+
+// ルール文書とカードを data/ に取得し、取得元を source.json に書く
+export async function fetchData(): Promise<FetchedSource> {
+  // 前回の取得で残ったファイルが混ざらないよう、毎回空にしてから取る。
+  rmSync(DATA_DIR, { recursive: true, force: true });
+  mkdirSync(DATA_DIR, { recursive: true });
+
+  const [rulesCommit, cardCount] = await Promise.all([fetchRules(), fetchCards()]);
+
+  const source = {
+    rules: { repo: RULES_REPO, commit: rulesCommit },
+    cards: { count: cardCount },
+    fetchedAt: new Date().toISOString(),
+  };
+  await Bun.write(SOURCE_FILE, `${JSON.stringify(source, null, 2)}\n`);
+  return source;
+}

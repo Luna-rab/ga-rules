@@ -1,8 +1,18 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
+import type { RawSource } from "../../application/ports";
 import { DataError } from "../../domain/errors";
 import type { Card, RawPage } from "../../domain/model";
 import { CardSchema } from "./card-schema";
+
+// dataDir は data/ と同じ構成（rules/・cards/）のディレクトリ
+export function createFileRawSource(dataDir: string): RawSource {
+  return {
+    readRules: () => readRules(dataDir),
+    readSummary: () => readSummary(dataDir),
+    readCards: () => readCards(dataDir),
+  };
+}
 
 // SUMMARY.md は GitBook の目次で、ルールのページではない。
 const NOT_PAGES = new Set(["SUMMARY.md"]);

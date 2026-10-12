@@ -4,19 +4,13 @@ import { drizzle } from "drizzle-orm/bun-sqlite";
 import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { FTS_REBUILD_SQL } from "../../../shared/infrastructure/sqlite/fts";
 import * as schema from "../../../shared/infrastructure/sqlite/schema";
+import type { IndexData, IndexWriter } from "../../application/ports";
 import { toCardRows } from "../../domain/faces";
-import type { Card, Page, Ruling, Term, TocEntry } from "../../domain/model";
-import type { Relations } from "../../domain/relate";
 import { createTables } from "./create-tables";
 
-export type IndexData = {
-  pages: Page[];
-  toc: TocEntry[];
-  terms: Term[];
-  cards: Card[];
-  rulings: Ruling[];
-  relations: Relations;
-};
+export function createSqliteIndexWriter(outPath: string): IndexWriter {
+  return { write: (data) => writeIndex(outPath, data) };
+}
 
 // 1 つの INSERT に載せる行数。SQLite の変数の上限（32766）を超えないようにする。
 const CHUNK = 500;

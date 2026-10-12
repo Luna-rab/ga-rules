@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { buildIndex } from "../build-index";
-import { CORRECTIONS } from "../../domain/corrections";
-import { DataError } from "../../domain/errors";
-import type { Card } from "../../domain/model";
+import { CORRECTIONS } from "../domain/corrections";
+import { DataError } from "../domain/errors";
+import type { Card } from "../domain/model";
+import { buildIndexFromFiles } from "../index";
 
 let dir: string;
 let dataDir: string;
@@ -152,11 +152,11 @@ function putValidData(): void {
   put(DAMAGE_PAGE, DAMAGE_HEAD);
 }
 
-describe("buildIndex", () => {
+describe("buildIndexFromFiles", () => {
   test("リンク先の節が無いリンクが無ければ outPath に index.sqlite を書く", async () => {
     putValidData();
 
-    await buildIndex({ dataDir, outPath });
+    await buildIndexFromFiles({ dataDir, outPath });
 
     expect(existsSync(outPath)).toBe(true);
   });
@@ -165,7 +165,7 @@ describe("buildIndex", () => {
     putValidData();
     put(DAMAGE_PAGE, `${DAMAGE_HEAD}2. See [nowhere](game-mechanics-damage.md#no-such-section).\n`);
 
-    const error = await buildIndex({ dataDir, outPath }).then(
+    const error = await buildIndexFromFiles({ dataDir, outPath }).then(
       () => "resolved",
       (e: unknown) => e,
     );
@@ -187,7 +187,7 @@ describe("buildIndex", () => {
       ),
     );
 
-    const error = await buildIndex({ dataDir, outPath }).then(
+    const error = await buildIndexFromFiles({ dataDir, outPath }).then(
       () => "resolved",
       (e: unknown) => e,
     );
@@ -209,7 +209,7 @@ describe("buildIndex", () => {
       })}\n`,
     );
 
-    const error = await buildIndex({ dataDir, outPath }).then(
+    const error = await buildIndexFromFiles({ dataDir, outPath }).then(
       () => "resolved",
       (e: unknown) => e,
     );
@@ -224,7 +224,7 @@ describe("buildIndex", () => {
     putValidData();
     put("rules/glossary/extra-page.md", "# Extra\n\n#### General Rules\n\n1. Extra.\n");
 
-    const error = await buildIndex({ dataDir, outPath }).then(
+    const error = await buildIndexFromFiles({ dataDir, outPath }).then(
       () => "resolved",
       (e: unknown) => e,
     );
@@ -236,11 +236,11 @@ describe("buildIndex", () => {
 
 async function build(): Promise<Database> {
   putValidData();
-  await buildIndex({ dataDir, outPath });
+  await buildIndexFromFiles({ dataDir, outPath });
   return new Database(outPath, { readonly: true });
 }
 
-describe("buildIndex: 両面カード", () => {
+describe("buildIndexFromFiles: 両面カード", () => {
   test("裏面が自分の slug の行になり、front_slug で表を指し、表の禁止を持つ", async () => {
     putValidData();
     const { rule: _r, references: _ref, legality: _l, back: _b, ...face } = card("x", null);
@@ -252,7 +252,7 @@ describe("buildIndex: 両面カード", () => {
         back: { ...face, slug: "back-face", name: "Back Face", types: ["ALLY"], power: 4 },
       })}\n`,
     );
-    await buildIndex({ dataDir, outPath });
+    await buildIndexFromFiles({ dataDir, outPath });
     const db = new Database(outPath, { readonly: true });
 
     const rows = db
@@ -289,7 +289,7 @@ describe("buildIndex: 両面カード", () => {
       })}\n`,
     );
 
-    const error = await buildIndex({ dataDir, outPath }).then(
+    const error = await buildIndexFromFiles({ dataDir, outPath }).then(
       () => "resolved",
       (e: unknown) => e,
     );
@@ -299,7 +299,7 @@ describe("buildIndex: 両面カード", () => {
   });
 });
 
-describe("buildIndex: 書いた index.sqlite の形", () => {
+describe("buildIndexFromFiles: 書いた index.sqlite の形", () => {
   test("rule_page に body 列が無く、parent_page_id と position がある", async () => {
     const db = await build();
     const columns = db
