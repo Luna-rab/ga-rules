@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { parseCardQuery, SEARCH_LIMIT } from "../../../domain/card-query";
+import { searchCards as run } from "../../../application/usecases/search-cards";
+import { SEARCH_LIMIT } from "../../../domain/card-query";
 import { renderCardLine } from "../../markdown/cards";
 import type { ToolDefinition } from "./types";
 
@@ -31,10 +32,10 @@ export const searchCards: ToolDefinition<typeof inputSchema> = {
     'Searches Grand Archive cards by conditions; every condition given must hold. Returns up to 20 cards, one per line, with the total match count. text matches name or effect text (all words); type, subtype, class, element take one value each (case-insensitive); cost_type is reserve/memory/none; speed is fast/slow; legal_in and banned_in are STANDARD/PANTHEON/DRAFT; the _min/_max pairs are numeric ranges. Back faces of double-faced cards are matched with their own stats and marked "back face of <front slug>"; legal_in and banned_in leave them out, since they can\'t be put in a deck. At least one condition is required.',
   inputSchema,
   handler: (ctx, args) => {
-    const parsed = parseCardQuery(args, ctx.catalog.attributes);
-    if (!parsed.ok) return { text: parsed.message, isError: true, count: 0 };
+    const result = run(ctx, args);
+    if (result.kind === "invalid") return { text: result.message, isError: true, count: 0 };
 
-    const { total, hits } = ctx.cards.search(parsed.query, SEARCH_LIMIT);
+    const { total, hits } = result;
     if (hits.length === 0) return { text: "No cards found.", count: 0 };
     const header =
       total > SEARCH_LIMIT

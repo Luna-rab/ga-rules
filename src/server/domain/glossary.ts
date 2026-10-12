@@ -1,4 +1,5 @@
 import { TERM_SYNONYMS, type TermKeys } from "../../shared/domain/term-key";
+import type { SectionNode } from "./model";
 
 // 本文の代わりに用語名の一覧を返す用語集のページ（get_term で引く）
 export const GLOSSARY_PAGE_IDS: readonly string[] = ["keywords-and-abilities", "game-terms"];
@@ -52,4 +53,26 @@ export function generalSections<S extends { sectionId: string }>(
     terms.flatMap((t) => t.definitions.filter((d) => d.pageId === pageId).map((d) => d.sectionId)),
   );
   return sections.filter((s) => !defined.has(s.sectionId));
+}
+
+// 用語集のページは本文が長いので、用語名の一覧と、どの用語にも属さない節だけを返す
+export type GlossaryPage = {
+  title: string;
+  pageId: string;
+  termNames: string[];
+  general: SectionNode[];
+};
+
+export function toGlossaryPage(
+  terms: TermLike[],
+  title: string,
+  pageId: string,
+  sections: SectionNode[],
+): GlossaryPage {
+  return {
+    title,
+    pageId,
+    termNames: glossaryTermNames(terms, pageId),
+    general: generalSections(terms, pageId, sections),
+  };
 }

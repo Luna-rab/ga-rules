@@ -1,11 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ToolContext } from "../../application/context";
-import { logToolCall } from "../../infrastructure/logging/console-logger";
+import type { ToolCallLogger } from "../../application/ports";
 import { SERVER_INSTRUCTIONS } from "../markdown/overview-text";
 import { TOOLS } from "./tools";
 
 // stateless の transport はリクエストをまたいで使い回せない。つなぐ server もリクエストごとに作る。
-export function createMcpServer(ctx: ToolContext): McpServer {
+export function createMcpServer(ctx: ToolContext, logToolCall: ToolCallLogger): McpServer {
   const server = new McpServer(
     { name: "ga-rules", version: "0.0.0" },
     { instructions: SERVER_INSTRUCTIONS },
@@ -48,7 +48,7 @@ export function createMcpServer(ctx: ToolContext): McpServer {
     }
   }
 
-  logValidationFailures(server);
+  logValidationFailures(server, logToolCall);
 
   return server;
 }
@@ -58,7 +58,7 @@ export function createMcpServer(ctx: ToolContext): McpServer {
 // 公開された差し込み口が無いための回避策。SDK の更新でメソッドが無くなったら、包まずに進む。
 // 引数の誤りのログだけが出なくなる（サーバーは止めない。CI の bun run check は src/server のテストを流さない）。
 // 呼ばれ方が変わった場合は、app.test.ts の引数の型の誤りのテスト（bun run test:server）が落ちる。
-function logValidationFailures(server: McpServer): void {
+function logValidationFailures(server: McpServer, logToolCall: ToolCallLogger): void {
   const original: unknown = Reflect.get(server, "validateToolInput");
   if (typeof original !== "function") return;
   Reflect.set(server, "validateToolInput", async (tool: unknown, args: unknown, name: string) => {

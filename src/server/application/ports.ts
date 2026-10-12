@@ -17,6 +17,10 @@ export type RuleRepository = {
   searchRulings: (words: string[], limit: number) => RulingHit[];
 };
 
+// ツールの呼び出し 1 回分。count は返した件数。0 で絞ると該当なしの呼び出しが集まる
+export type ToolCallLog = { tool: string; args: unknown; count: number; ms: number; error?: true };
+export type ToolCallLogger = (entry: ToolCallLog) => void;
+
 export type CardRepository = {
   // 渡した slug の順に並べる。索引に無い slug は飛ばす
   readSummaries: (slugs: string[]) => CardSummary[];
